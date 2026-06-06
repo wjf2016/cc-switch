@@ -408,6 +408,9 @@ pub struct ProviderMeta {
     /// 用量查询脚本配置
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage_script: Option<UsageScript>,
+    /// 绑定的代理服务器 ID；为空表示直连
+    #[serde(rename = "proxyServerId", skip_serializing_if = "Option::is_none")]
+    pub proxy_server_id: Option<String>,
     /// 请求地址管理：测速后自动选择最佳端点
     #[serde(rename = "endpointAutoSelect", skip_serializing_if = "Option::is_none")]
     pub endpoint_auto_select: Option<bool>,

@@ -15,12 +15,25 @@ export interface ProxyTestResult {
   error: string | null;
 }
 
-/**
- * 出站代理状态
- */
-export interface UpstreamProxyStatus {
-  enabled: boolean;
-  proxyUrl: string | null;
+export interface ProxyServer {
+  id: string;
+  name: string;
+  url: string;
+  sortIndex?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ProxyServerPayload {
+  id: string;
+  name: string;
+  url: string;
+  sortIndex?: number;
+}
+
+export interface DeleteProxyServerResult {
+  deleted: boolean;
+  affectedProviders: number;
 }
 
 /**
@@ -32,28 +45,24 @@ export interface DetectedProxy {
   port: number;
 }
 
-/**
- * 获取全局代理 URL
- *
- * @returns 代理 URL，null 表示未配置（直连）
- */
-export async function getGlobalProxyUrl(): Promise<string | null> {
-  return invoke<string | null>("get_global_proxy_url");
+export async function getProxyServers(): Promise<ProxyServer[]> {
+  return invoke<ProxyServer[]>("get_proxy_servers");
 }
 
-/**
- * 设置全局代理 URL
- *
- * @param url - 代理 URL（如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）
- *              空字符串表示清除代理（直连）
- */
-export async function setGlobalProxyUrl(url: string): Promise<void> {
+export async function saveProxyServers(
+  proxyServers: ProxyServerPayload[],
+): Promise<void> {
   try {
-    return await invoke("set_global_proxy_url", { url });
+    return await invoke("save_proxy_servers", { proxyServers });
   } catch (error) {
-    // Tauri invoke 错误可能是字符串
     throw new Error(typeof error === "string" ? error : String(error));
   }
+}
+
+export async function deleteProxyServer(
+  id: string,
+): Promise<DeleteProxyServerResult> {
+  return invoke<DeleteProxyServerResult>("delete_proxy_server", { id });
 }
 
 /**
@@ -64,15 +73,6 @@ export async function setGlobalProxyUrl(url: string): Promise<void> {
  */
 export async function testProxyUrl(url: string): Promise<ProxyTestResult> {
   return invoke<ProxyTestResult>("test_proxy_url", { url });
-}
-
-/**
- * 获取当前出站代理状态
- *
- * @returns 代理状态，包含是否启用和代理 URL
- */
-export async function getUpstreamProxyStatus(): Promise<UpstreamProxyStatus> {
-  return invoke<UpstreamProxyStatus>("get_upstream_proxy_status");
 }
 
 /**

@@ -8,40 +8,36 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import {
-  getGlobalProxyUrl,
-  setGlobalProxyUrl,
+  getProxyServers,
+  saveProxyServers,
+  deleteProxyServer,
   testProxyUrl,
-  getUpstreamProxyStatus,
   scanLocalProxies,
+  type DeleteProxyServerResult,
+  type ProxyServer,
+  type ProxyServerPayload,
   type ProxyTestResult,
-  type UpstreamProxyStatus,
   type DetectedProxy,
 } from "@/lib/api/globalProxy";
 
-/**
- * 获取全局代理 URL
- */
-export function useGlobalProxyUrl() {
+export function useProxyServers() {
   return useQuery({
-    queryKey: ["globalProxyUrl"],
-    queryFn: getGlobalProxyUrl,
-    staleTime: 30 * 1000, // 30秒内不重新获取，避免展开时闪烁
+    queryKey: ["proxyServers"],
+    queryFn: getProxyServers,
+    staleTime: 30 * 1000,
   });
 }
 
-/**
- * 设置全局代理 URL
- */
-export function useSetGlobalProxyUrl() {
+export function useSaveProxyServers() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: setGlobalProxyUrl,
+    mutationFn: (proxyServers: ProxyServerPayload[]) =>
+      saveProxyServers(proxyServers),
     onSuccess: () => {
       toast.success(t("settings.globalProxy.saved"));
-      queryClient.invalidateQueries({ queryKey: ["globalProxyUrl"] });
-      queryClient.invalidateQueries({ queryKey: ["upstreamProxyStatus"] });
+      queryClient.invalidateQueries({ queryKey: ["proxyServers"] });
     },
     onError: (error: unknown) => {
       const message =
@@ -51,6 +47,47 @@ export function useSetGlobalProxyUrl() {
             ? error
             : "Unknown error";
       toast.error(t("settings.globalProxy.saveFailed", { error: message }));
+    },
+  });
+}
+
+export function useDeleteProxyServer() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteProxyServer(id),
+    onSuccess: (result: DeleteProxyServerResult) => {
+      queryClient.invalidateQueries({ queryKey: ["proxyServers"] });
+      if (result.affectedProviders > 0) {
+        toast.success(
+          t("settings.globalProxy.deletedWithFallback", {
+            count: result.affectedProviders,
+            defaultValue:
+              "代理服务器已删除，{{count}} 个供应商已自动回退为直连",
+          }),
+        );
+      } else {
+        toast.success(
+          t("settings.globalProxy.deleted", {
+            defaultValue: "代理服务器已删除",
+          }),
+        );
+      }
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(
+        t("settings.globalProxy.deleteFailed", {
+          error: message,
+          defaultValue: "删除代理服务器失败：{{error}}",
+        }),
+      );
     },
   });
 }
@@ -80,19 +117,6 @@ export function useTestProxy() {
   });
 }
 
-/**
- * 获取当前出站代理状态
- */
-export function useUpstreamProxyStatus() {
-  return useQuery<UpstreamProxyStatus>({
-    queryKey: ["upstreamProxyStatus"],
-    queryFn: getUpstreamProxyStatus,
-  });
-}
-
-/**
- * 扫描本地代理
- */
 export function useScanProxies() {
   const { t } = useTranslation();
 
@@ -106,4 +130,4 @@ export function useScanProxies() {
   });
 }
 
-export type { DetectedProxy };
+export type { DetectedProxy, ProxyServer };

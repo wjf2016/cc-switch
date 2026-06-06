@@ -96,6 +96,7 @@ impl StreamCheckService {
         auth_override: Option<AuthInfo>,
         base_url_override: Option<String>,
         claude_api_format_override: Option<String>,
+        proxy_url: Option<String>,
     ) -> Result<StreamCheckResult, AppError> {
         // 合并供应商单独配置和全局配置
         let effective_config = Self::merge_provider_config(provider, config);
@@ -109,6 +110,7 @@ impl StreamCheckService {
                 auth_override.clone(),
                 base_url_override.clone(),
                 claude_api_format_override.clone(),
+                proxy_url.clone(),
             )
             .await;
 
@@ -202,6 +204,7 @@ impl StreamCheckService {
         auth_override: Option<AuthInfo>,
         base_url_override: Option<String>,
         claude_api_format_override: Option<String>,
+        proxy_url: Option<String>,
     ) -> Result<StreamCheckResult, AppError> {
         let start = Instant::now();
 
@@ -212,7 +215,8 @@ impl StreamCheckService {
             app_type,
             AppType::OpenCode | AppType::OpenClaw | AppType::Hermes
         ) {
-            return Self::check_once_without_adapter(app_type, provider, config, start).await;
+            return Self::check_once_without_adapter(app_type, provider, config, start, proxy_url)
+                .await;
         }
 
         let adapter: Box<dyn ProviderAdapter> = if matches!(app_type, AppType::ClaudeDesktop) {
@@ -233,7 +237,19 @@ impl StreamCheckService {
             .ok_or_else(|| AppError::Message("API Key not found".to_string()))?;
 
         // 获取 HTTP 客户端
-        let client = crate::proxy::http_client::get();
+        let client = match crate::proxy::http_client::get_for_provider(
+            provider,
+            proxy_url.as_deref(),
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!(
+                    "[StreamCheck] Failed to create client with proxy for provider={}: {e}. Falling back to global client.",
+                    provider.id
+                );
+                crate::proxy::http_client::get()
+            }
+        };
         let request_timeout = std::time::Duration::from_secs(config.timeout_secs);
 
         let model_to_test = Self::resolve_test_model(app_type, provider, config);
@@ -710,9 +726,22 @@ impl StreamCheckService {
         provider: &Provider,
         config: &StreamCheckConfig,
         start: Instant,
+        proxy_url: Option<String>,
     ) -> Result<StreamCheckResult, AppError> {
         // 获取 HTTP 客户端
-        let client = crate::proxy::http_client::get();
+        let client = match crate::proxy::http_client::get_for_provider(
+            provider,
+            proxy_url.as_deref(),
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!(
+                    "[StreamCheck] Failed to create client with proxy for provider={}: {e}. Falling back to global client.",
+                    provider.id
+                );
+                crate::proxy::http_client::get()
+            }
+        };
         let request_timeout = std::time::Duration::from_secs(config.timeout_secs);
 
         let model_to_test = Self::resolve_test_model(app_type, provider, config);

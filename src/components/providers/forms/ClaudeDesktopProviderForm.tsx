@@ -66,6 +66,8 @@ import {
   type ClaudeDesktopDefaultRoute,
 } from "@/lib/api/providers";
 import { resolveManagedAccountId } from "@/lib/authBinding";
+import { useProxyServers } from "@/hooks/useGlobalProxy";
+import { ProviderProxySelector } from "./ProviderProxySelector";
 
 export type ClaudeDesktopProviderFormValues = ProviderFormData & {
   presetId?: string;
@@ -88,6 +90,7 @@ export interface ClaudeDesktopProviderFormProps {
   submitLabel: string;
   onSubmit: (values: ClaudeDesktopProviderFormValues) => Promise<void> | void;
   onCancel: () => void;
+  onOpenProxySettings?: () => void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
   initialData?: {
     name?: string;
@@ -245,11 +248,14 @@ export function ClaudeDesktopProviderForm({
   submitLabel,
   onSubmit,
   onCancel,
+  onOpenProxySettings,
   onSubmittingChange,
   initialData,
   showButtons = true,
 }: ClaudeDesktopProviderFormProps) {
   const { t } = useTranslation();
+  const { data: proxyServers = [], isLoading: isProxyServersLoading } =
+    useProxyServers();
   const initialMode = initialData?.meta?.claudeDesktopMode ?? "direct";
   const [mode, setMode] = useState<"direct" | "proxy">(initialMode);
   const needsModelMapping = mode === "proxy";
@@ -279,6 +285,9 @@ export function ClaudeDesktopProviderForm({
   );
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     "custom",
+  );
+  const [selectedProxyServerId, setSelectedProxyServerId] = useState<string>(
+    () => initialData?.meta?.proxyServerId ?? "",
   );
   const [activePreset, setActivePreset] = useState<{
     id: string;
@@ -340,6 +349,10 @@ export function ClaudeDesktopProviderForm({
     defaultValues,
     mode: "onSubmit",
   });
+
+  useEffect(() => {
+    setSelectedProxyServerId(initialData?.meta?.proxyServerId ?? "");
+  }, [initialData]);
 
   useEffect(() => {
     onSubmittingChange?.(form.formState.isSubmitting || isFetchingModels);
@@ -535,6 +548,7 @@ export function ClaudeDesktopProviderForm({
       delete meta.apiFormat;
       delete meta.endpointAutoSelect;
       delete meta.isFullUrl;
+      meta.proxyServerId = selectedProxyServerId || undefined;
       await onSubmit({
         ...values,
         name: values.name.trim(),
@@ -645,6 +659,7 @@ export function ClaudeDesktopProviderForm({
       ...(initialData?.meta ?? {}),
       claudeDesktopMode: mode,
       apiFormat: mode === "proxy" ? apiFormat : "anthropic",
+      proxyServerId: selectedProxyServerId || undefined,
     };
 
     meta.claudeDesktopModelRoutes = routeMap;
@@ -733,6 +748,14 @@ export function ClaudeDesktopProviderForm({
         )}
 
         <BasicFormFields form={form} />
+
+        <ProviderProxySelector
+          isLoading={isProxyServersLoading}
+          proxyServers={proxyServers}
+          value={selectedProxyServerId}
+          onChange={setSelectedProxyServerId}
+          onOpenProxySettings={onOpenProxySettings}
+        />
 
         {isOfficial && (
           <div className="rounded-lg border border-border-default bg-muted/20 p-3 text-sm text-muted-foreground">

@@ -342,8 +342,8 @@
         "description": "Manage token pricing rules for each model"
       },
       "globalProxy": {
-        "title": "Global Outbound Proxy",
-        "description": "Configure proxy for CC Switch to access external APIs"
+        "title": "Proxy Server Pool",
+        "description": "Manage reusable outbound proxy servers for provider-level selection"
       },
       "data": {
         "title": "Data Management",
@@ -821,15 +821,15 @@
     "devModeRestartHint": "Dev Mode: Automatic restart not supported, please manually restart the application.",
     "saving": "Saving...",
     "globalProxy": {
-      "label": "Global Proxy",
-      "hint": "Proxy all requests (API, Skills download, etc.). When local routing is enabled, app traffic is also routed through this proxy. Leave empty for direct connection.",
+      "label": "Proxy Server Pool",
+      "hint": "Add reusable proxy servers here. These entries do not act as a global proxy by themselves; providers can optionally select one from this pool.",
       "username": "Username (optional)",
       "password": "Password (optional)",
       "test": "Test Connection",
       "scan": "Scan Local Proxies",
       "clear": "Clear",
       "scanFailed": "Scan failed: {{error}}",
-      "saved": "Proxy settings saved",
+      "saved": "Proxy server saved",
       "saveFailed": "Save failed: {{error}}",
       "testSuccess": "Connected! Latency {{latency}}ms",
       "testFailed": "Connection failed: {{error}}",
@@ -846,7 +846,16 @@
       "pricingSaveFailed": "Failed to save pricing defaults: {{error}}",
       "pricingLoadFailed": "Failed to load pricing defaults: {{error}}",
       "defaultCostMultiplierRequired": "Default multiplier is required",
-      "defaultCostMultiplierInvalid": "Invalid multiplier format"
+      "defaultCostMultiplierInvalid": "Invalid multiplier format",
+      "add": "Add Proxy Server",
+      "empty": "No proxy servers configured yet. Click Add in the top-right to create one.",
+      "name": "Name",
+      "namePlaceholder": "For example: Office Proxy",
+      "url": "Proxy URL",
+      "unnamed": "Unnamed Proxy Server",
+      "deleted": "Proxy server deleted",
+      "deletedWithFallback": "Proxy server deleted, {{count}} providers automatically fell back to direct connection",
+      "deleteFailed": "Failed to delete proxy server: {{error}}"
     },
     "saveFailedGeneric": "Save failed, please try again"
   },
@@ -1098,7 +1107,12 @@
     "fetchModelsAuthFailed": "API Key is invalid or lacks permission",
     "fetchModelsNotSupported": "This provider does not support fetching model list",
     "fetchModelsEndpointNotFound": "No reachable models endpoint found. Please check the Base URL or confirm whether the provider exposes this API.",
-    "fetchModelsTimeout": "Request timed out, please check network connection"
+    "fetchModelsTimeout": "Request timed out, please check network connection",
+    "proxyServer": "Proxy Server",
+    "proxyDirect": "Direct Connection (No Proxy)",
+    "proxyHint": "Once selected, only this provider will use the proxy. Leave it unselected to keep a direct connection.",
+    "proxyPoolEmpty": "No proxy server configured. This provider will keep using a direct connection.",
+    "proxyOpenSettings": "Configure Proxy Servers"
   },
   "copilot": {
     "authSection": "GitHub Copilot Authentication",

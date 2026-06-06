@@ -35,6 +35,20 @@ pub async fn stream_check_provider(
         auth_override.as_ref(),
     )
     .await?;
+
+    let proxy_url = if let Some(meta) = &provider.meta {
+        if let Some(proxy_id) = &meta.proxy_server_id {
+            match state.db.get_proxy_server_by_id(proxy_id) {
+                Ok(Some(server)) => Some(server.url),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let result = StreamCheckService::check_with_retry(
         &app_type,
         provider,
@@ -42,6 +56,7 @@ pub async fn stream_check_provider(
         auth_override,
         base_url_override,
         claude_api_format_override,
+        proxy_url,
     )
     .await?;
 
@@ -107,6 +122,20 @@ pub async fn stream_check_all_providers(
             );
             None
         });
+
+        let proxy_url = if let Some(meta) = &provider.meta {
+            if let Some(proxy_id) = &meta.proxy_server_id {
+                match state.db.get_proxy_server_by_id(proxy_id) {
+                    Ok(Some(server)) => Some(server.url),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let result = StreamCheckService::check_with_retry(
             &app_type,
             &provider,
@@ -114,6 +143,7 @@ pub async fn stream_check_all_providers(
             auth_override,
             base_url_override,
             claude_api_format_override,
+            proxy_url,
         )
         .await
         .unwrap_or_else(|e| {

@@ -73,6 +73,7 @@ import { ClaudeDesktopProviderForm } from "./ClaudeDesktopProviderForm";
 import { CodexFormFields } from "./CodexFormFields";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { OmoFormFields } from "./OmoFormFields";
+import { ProviderProxySelector } from "./ProviderProxySelector";
 import { parseOmoOtherFieldsObject } from "@/types/omo";
 import {
   ProviderAdvancedConfig,
@@ -114,6 +115,7 @@ import { HERMES_DEFAULT_CONFIG } from "./hooks/useHermesFormState";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { useHermesLiveProviderIds } from "@/hooks/useHermes";
+import { useProxyServers } from "@/hooks/useGlobalProxy";
 
 type PresetEntry = {
   id: string;
@@ -216,6 +218,7 @@ export interface ProviderFormProps {
   submitLabel: string;
   onSubmit: (values: ProviderFormValues) => Promise<void> | void;
   onCancel: () => void;
+  onOpenProxySettings?: () => void;
   onUniversalPresetSelect?: (preset: UniversalProviderPreset) => void;
   onManageUniversalProviders?: () => void;
   onSubmittingChange?: (isSubmitting: boolean) => void;
@@ -247,6 +250,7 @@ function ProviderFormFull({
   submitLabel,
   onSubmit,
   onCancel,
+  onOpenProxySettings,
   onUniversalPresetSelect,
   onManageUniversalProviders,
   onSubmittingChange,
@@ -264,6 +268,8 @@ function ProviderFormFull({
   const { data: settingsData } = useSettingsQuery();
   const showCommonConfigNotice =
     settingsData != null && settingsData.commonConfigConfirmed !== true;
+  const { data: proxyServers = [], isLoading: isProxyServersLoading } =
+    useProxyServers();
 
   const handleCommonConfigConfirm = async () => {
     try {
@@ -309,6 +315,9 @@ function ProviderFormFull({
   const [testConfig, setTestConfig] = useState<ProviderTestConfig>(
     () => initialData?.meta?.testConfig ?? { enabled: false },
   );
+  const [selectedProxyServerId, setSelectedProxyServerId] = useState<string>(
+    () => initialData?.meta?.proxyServerId ?? "",
+  );
   const [pricingConfig, setPricingConfig] = useState<{
     enabled: boolean;
     costMultiplier?: string;
@@ -345,6 +354,7 @@ function ProviderFormFull({
       supportsFullUrl ? (initialData?.meta?.isFullUrl ?? false) : false,
     );
     setTestConfig(initialData?.meta?.testConfig ?? { enabled: false });
+    setSelectedProxyServerId(initialData?.meta?.proxyServerId ?? "");
     setPricingConfig({
       enabled:
         initialData?.meta?.costMultiplier !== undefined ||
@@ -1410,6 +1420,7 @@ function ProviderFormFull({
         supportsFullUrl && category !== "official" && localIsFullUrl
           ? true
           : undefined,
+      proxyServerId: selectedProxyServerId || undefined,
     };
 
     if (!isCodexOauthProvider && "codexFastMode" in nextMeta) {
@@ -1936,6 +1947,14 @@ function ProviderFormFull({
                 </div>
               ) : undefined
             }
+          />
+
+          <ProviderProxySelector
+            isLoading={isProxyServersLoading}
+            proxyServers={proxyServers}
+            value={selectedProxyServerId}
+            onChange={setSelectedProxyServerId}
+            onOpenProxySettings={onOpenProxySettings}
           />
 
           {appId === "claude" && (

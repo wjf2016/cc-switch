@@ -1536,6 +1536,11 @@ function App() {
         open={isAddOpen}
         onOpenChange={setIsAddOpen}
         appId={activeApp}
+        onOpenProxySettings={() => {
+          setIsAddOpen(false);
+          setSettingsDefaultTab("proxy");
+          setCurrentView("settings");
+        }}
         onSubmit={addProvider}
       />
 
@@ -1546,6 +1551,11 @@ function App() {
           if (!open) {
             setEditingProvider(null);
           }
+        }}
+        onOpenProxySettings={() => {
+          setEditingProvider(null);
+          setSettingsDefaultTab("proxy");
+          setCurrentView("settings");
         }}
         onSubmit={handleEditProvider}
         appId={activeApp}

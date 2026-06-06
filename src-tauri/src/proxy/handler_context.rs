@@ -219,6 +219,7 @@ impl RequestContext {
 
         RequestForwarder::new(
             state.provider_router.clone(),
+            Some(state.db.clone()),
             non_streaming_timeout,
             state.status.clone(),
             state.current_providers.clone(),

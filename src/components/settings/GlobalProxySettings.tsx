@@ -1,23 +1,28 @@
-/**
- * 全局出站代理设置组件
- *
- * 提供配置全局代理的输入界面，支持用户名密码认证。
- */
-
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, TestTube2, Search, Eye, EyeOff, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2, Pencil, Plus, Search, TestTube2, Trash2 } from "lucide-react";
 import {
-  useGlobalProxyUrl,
-  useSetGlobalProxyUrl,
-  useTestProxy,
+  useDeleteProxyServer,
+  useProxyServers,
+  useSaveProxyServers,
   useScanProxies,
+  useTestProxy,
   type DetectedProxy,
+  type ProxyServer,
 } from "@/hooks/useGlobalProxy";
 
-/** 从完整 URL 提取认证信息 */
+type DraftProxyServer = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  username: string;
+  password: string;
+  sortIndex?: number;
+};
+
 function extractAuth(url: string): {
   baseUrl: string;
   username: string;
@@ -29,7 +34,6 @@ function extractAuth(url: string): {
     const parsed = new URL(url);
     const username = decodeURIComponent(parsed.username || "");
     const password = decodeURIComponent(parsed.password || "");
-    // 移除认证信息，获取基础 URL
     parsed.username = "";
     parsed.password = "";
     return { baseUrl: parsed.toString(), username, password };
@@ -38,74 +42,118 @@ function extractAuth(url: string): {
   }
 }
 
-/** 将认证信息合并到 URL */
 function mergeAuth(
   baseUrl: string,
   username: string,
   password: string,
 ): string {
   if (!baseUrl.trim()) return "";
-  if (!username.trim()) return baseUrl;
+  if (!username.trim()) return baseUrl.trim();
 
   try {
-    const parsed = new URL(baseUrl);
-    // URL 对象的 username/password setter 会自动进行 percent-encoding
-    // 不要使用 encodeURIComponent，否则会导致双重编码
+    const parsed = new URL(baseUrl.trim());
     parsed.username = username.trim();
     if (password) {
       parsed.password = password;
     }
     return parsed.toString();
   } catch {
-    // URL 解析失败，尝试手动插入（此时需要手动编码）
-    const match = baseUrl.match(/^(\w+:\/\/)(.+)$/);
+    const match = baseUrl.trim().match(/^(\w+:\/\/)(.+)$/);
     if (match) {
       const auth = password
         ? `${encodeURIComponent(username.trim())}:${encodeURIComponent(password)}@`
         : `${encodeURIComponent(username.trim())}@`;
       return `${match[1]}${auth}${match[2]}`;
     }
-    return baseUrl;
+    return baseUrl.trim();
   }
+}
+
+function toDraft(proxyServer: ProxyServer): DraftProxyServer {
+  const { baseUrl, username, password } = extractAuth(proxyServer.url);
+  return {
+    id: proxyServer.id,
+    name: proxyServer.name,
+    baseUrl,
+    username,
+    password,
+    sortIndex: proxyServer.sortIndex,
+  };
+}
+
+function createEmptyDraft(): DraftProxyServer {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    baseUrl: "",
+    username: "",
+    password: "",
+  };
 }
 
 export function GlobalProxySettings() {
   const { t } = useTranslation();
-  const { data: savedUrl, isLoading } = useGlobalProxyUrl();
-  const setMutation = useSetGlobalProxyUrl();
+  const { data: proxyServers = [], isLoading } = useProxyServers();
+  const saveMutation = useSaveProxyServers();
+  const deleteMutation = useDeleteProxyServer();
   const testMutation = useTestProxy();
   const scanMutation = useScanProxies();
 
-  const [url, setUrl] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [drafts, setDrafts] = useState<DraftProxyServer[]>([]);
+  const [dirtyIds, setDirtyIds] = useState<string[]>([]);
   const [detected, setDetected] = useState<DetectedProxy[]>([]);
 
-  // 计算完整 URL（含认证信息）
-  const fullUrl = useMemo(
-    () => mergeAuth(url, username, password),
-    [url, username, password],
-  );
-
-  // 同步远程配置
   useEffect(() => {
-    if (savedUrl !== undefined) {
-      const { baseUrl, username: u, password: p } = extractAuth(savedUrl || "");
-      setUrl(baseUrl);
-      setUsername(u);
-      setPassword(p);
-      setDirty(false);
-    }
-  }, [savedUrl]);
+    setDrafts(proxyServers.map(toDraft));
+    setDirtyIds([]);
+  }, [proxyServers]);
 
-  const handleSave = async () => {
-    await setMutation.mutateAsync(fullUrl);
-    setDirty(false);
+  const dirtyIdSet = useMemo(() => new Set(dirtyIds), [dirtyIds]);
+
+  const markDirty = (id: string) => {
+    setDirtyIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   };
 
-  const handleTest = async () => {
+  const updateDraft = (
+    id: string,
+    updater: (draft: DraftProxyServer) => DraftProxyServer,
+  ) => {
+    setDrafts((prev) =>
+      prev.map((item) => (item.id === id ? updater(item) : item)),
+    );
+    markDirty(id);
+  };
+
+  const handleAdd = () => {
+    const draft = createEmptyDraft();
+    setDrafts((prev) => [...prev, draft]);
+    markDirty(draft.id);
+  };
+
+  const handleSave = async (draft: DraftProxyServer) => {
+    await saveMutation.mutateAsync([
+      {
+        id: draft.id,
+        name: draft.name.trim(),
+        url: mergeAuth(draft.baseUrl, draft.username, draft.password),
+        sortIndex: draft.sortIndex,
+      },
+    ]);
+    setDirtyIds((prev) => prev.filter((item) => item !== draft.id));
+  };
+
+  const handleDelete = async (draft: DraftProxyServer) => {
+    const existsInBackend = proxyServers.some((item) => item.id === draft.id);
+    if (!existsInBackend) {
+      setDrafts((prev) => prev.filter((item) => item.id !== draft.id));
+      setDirtyIds((prev) => prev.filter((item) => item !== draft.id));
+      return;
+    }
+    await deleteMutation.mutateAsync(draft.id);
+  };
+
+  const handleTest = async (draft: DraftProxyServer) => {
+    const fullUrl = mergeAuth(draft.baseUrl, draft.username, draft.password);
     if (fullUrl) {
       await testMutation.mutateAsync(fullUrl);
     }
@@ -116,30 +164,38 @@ export function GlobalProxySettings() {
     setDetected(result);
   };
 
-  const handleSelect = (proxyUrl: string) => {
-    const { baseUrl, username: u, password: p } = extractAuth(proxyUrl);
-    setUrl(baseUrl);
-    setUsername(u);
-    setPassword(p);
-    setDirty(true);
+  const handleSelectDetected = (proxyUrl: string) => {
+    const lastDraft = drafts[drafts.length - 1];
+    const { baseUrl, username, password } = extractAuth(proxyUrl);
+    if (!lastDraft) {
+      const draft = createEmptyDraft();
+      setDrafts((prev) => [
+        ...prev,
+        {
+          ...draft,
+          baseUrl,
+          username,
+          password,
+        },
+      ]);
+      markDirty(draft.id);
+      setDetected([]);
+      return;
+    }
+
+    updateDraft(lastDraft.id, (draft) => ({
+      ...draft,
+      baseUrl,
+      username,
+      password,
+    }));
     setDetected([]);
   };
 
-  const handleClear = () => {
-    setUrl("");
-    setUsername("");
-    setPassword("");
-    setDirty(true);
-  };
+  const getFullUrl = (draft: DraftProxyServer) =>
+    mergeAuth(draft.baseUrl, draft.username, draft.password);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && dirty && !setMutation.isPending) {
-      handleSave();
-    }
-  };
-
-  // 只在首次加载且无数据时显示加载状态
-  if (isLoading && savedUrl === undefined) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center p-4">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -148,126 +204,176 @@ export function GlobalProxySettings() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* 描述 */}
-      <p className="text-sm text-muted-foreground">
-        {t("settings.globalProxy.hint")}
-      </p>
-
-      {/* 代理地址输入框和按钮 */}
-      <div className="flex gap-2">
-        <Input
-          placeholder="http://127.0.0.1:7890 / socks5://127.0.0.1:1080"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            setDirty(true);
-          }}
-          onKeyDown={handleKeyDown}
-          className="font-mono text-sm flex-1"
-        />
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={scanMutation.isPending}
-          onClick={handleScan}
-          title={t("settings.globalProxy.scan")}
-        >
-          {scanMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Search className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={!fullUrl || testMutation.isPending}
-          onClick={handleTest}
-          title={t("settings.globalProxy.test")}
-        >
-          {testMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <TestTube2 className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={!url && !username && !password}
-          onClick={handleClear}
-          title={t("settings.globalProxy.clear")}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={!dirty || setMutation.isPending}
-          size="sm"
-        >
-          {setMutation.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          {t("common.save")}
-        </Button>
-      </div>
-
-      {/* 认证信息：用户名 + 密码（可选） */}
-      <div className="flex gap-2">
-        <Input
-          placeholder={t("settings.globalProxy.username")}
-          value={username}
-          onChange={(e) => {
-            setUsername(e.target.value);
-            setDirty(true);
-          }}
-          onKeyDown={handleKeyDown}
-          className="font-mono text-sm flex-1"
-        />
-        <div className="relative flex-1">
-          <Input
-            type={showPassword ? "text" : "password"}
-            placeholder={t("settings.globalProxy.password")}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setDirty(true);
-            }}
-            onKeyDown={handleKeyDown}
-            className="font-mono text-sm pr-10"
-          />
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          {t("settings.globalProxy.hint")}
+        </p>
+        <div className="flex gap-2">
           <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-            onClick={() => setShowPassword(!showPassword)}
-            tabIndex={-1}
+            variant="outline"
+            size="sm"
+            disabled={scanMutation.isPending}
+            onClick={handleScan}
           >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            {scanMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Eye className="h-4 w-4 text-muted-foreground" />
+              <Search className="mr-2 h-4 w-4" />
             )}
+            {t("settings.globalProxy.scan")}
+          </Button>
+          <Button size="sm" onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("settings.globalProxy.add", { defaultValue: "新增代理服务器" })}
           </Button>
         </div>
       </div>
 
-      {/* 扫描结果 */}
       {detected.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {detected.map((p) => (
+        <div className="flex flex-wrap gap-2 rounded-md border p-3">
+          {detected.map((proxy) => (
             <Button
-              key={p.url}
+              key={proxy.url}
               variant="secondary"
               size="sm"
-              onClick={() => handleSelect(p.url)}
+              onClick={() => handleSelectDetected(proxy.url)}
               className="font-mono text-xs"
             >
-              {p.url}
+              {proxy.url}
             </Button>
           ))}
+        </div>
+      )}
+
+      {drafts.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          {t("settings.globalProxy.empty", {
+            defaultValue: "尚未配置代理服务器，点击右上角新增即可创建。",
+          })}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {drafts.map((draft) => {
+            const fullUrl = getFullUrl(draft);
+            const isDirty = dirtyIdSet.has(draft.id);
+            return (
+              <div key={draft.id} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">
+                      {draft.name.trim() ||
+                        t("settings.globalProxy.unnamed", {
+                          defaultValue: "未命名代理服务器",
+                        })}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!fullUrl || testMutation.isPending}
+                      onClick={() => handleTest(draft)}
+                    >
+                      <TestTube2 className="mr-2 h-4 w-4" />
+                      {t("settings.globalProxy.test")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!isDirty || saveMutation.isPending}
+                      onClick={() => handleSave(draft)}
+                    >
+                      {saveMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      {t("common.save")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => handleDelete(draft)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {t("common.delete", { defaultValue: "删除" })}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>
+                      {t("settings.globalProxy.name", { defaultValue: "名称" })}
+                    </Label>
+                    <Input
+                      value={draft.name}
+                      onChange={(e) =>
+                        updateDraft(draft.id, (item) => ({
+                          ...item,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder={t("settings.globalProxy.namePlaceholder", {
+                        defaultValue: "例如：公司代理",
+                      })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      {t("settings.globalProxy.url", {
+                        defaultValue: "代理地址",
+                      })}
+                    </Label>
+                    <Input
+                      value={draft.baseUrl}
+                      onChange={(e) =>
+                        updateDraft(draft.id, (item) => ({
+                          ...item,
+                          baseUrl: e.target.value,
+                        }))
+                      }
+                      placeholder="http://127.0.0.1:7890 / socks5://127.0.0.1:1080"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      {t("settings.globalProxy.username", {
+                        defaultValue: "用户名（可选）",
+                      })}
+                    </Label>
+                    <Input
+                      value={draft.username}
+                      onChange={(e) =>
+                        updateDraft(draft.id, (item) => ({
+                          ...item,
+                          username: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      {t("settings.globalProxy.password", {
+                        defaultValue: "密码（可选）",
+                      })}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={draft.password}
+                      onChange={(e) =>
+                        updateDraft(draft.id, (item) => ({
+                          ...item,
+                          password: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

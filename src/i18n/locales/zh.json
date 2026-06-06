@@ -342,8 +342,8 @@
         "description": "管理各模型 Token 计费规则"
       },
       "globalProxy": {
-        "title": "全局出站代理",
-        "description": "配置 CC Switch 访问外部 API 时使用的代理"
+        "title": "代理服务器池",
+        "description": "管理可复用的出站代理服务器，供各个供应商选择"
       },
       "data": {
         "title": "数据管理",
@@ -821,15 +821,15 @@
     "devModeRestartHint": "开发模式下不支持自动重启，请手动重新启动应用。",
     "saving": "正在保存...",
     "globalProxy": {
-      "label": "全局代理",
-      "hint": "代理所有请求（API、Skills 下载等）。开启本地路由时，应用的请求也会经过此代理。留空表示直连。",
+      "label": "代理服务器池",
+      "hint": "在此处添加可复用的代理服务器。这些条目本身不作为全局代理生效；供应商可以根据需要选择其中一个代理。留空表示直连。",
       "username": "用户名（可选）",
       "password": "密码（可选）",
       "test": "测试连接",
       "scan": "扫描本地代理",
       "clear": "清除",
       "scanFailed": "扫描失败：{{error}}",
-      "saved": "代理设置已保存",
+      "saved": "代理服务器配置已保存",
       "saveFailed": "保存失败：{{error}}",
       "testSuccess": "连接成功！延迟 {{latency}}ms",
       "testFailed": "连接失败：{{error}}",
@@ -846,7 +846,16 @@
       "pricingSaveFailed": "保存计费配置失败：{{error}}",
       "pricingLoadFailed": "加载计费配置失败：{{error}}",
       "defaultCostMultiplierRequired": "默认倍率不能为空",
-      "defaultCostMultiplierInvalid": "默认倍率格式不正确"
+      "defaultCostMultiplierInvalid": "默认倍率格式不正确",
+      "add": "添加代理服务器",
+      "empty": "尚未配置代理服务器，点击右上角“添加”即可创建。",
+      "name": "名称",
+      "namePlaceholder": "例如：办公代理",
+      "url": "代理地址",
+      "unnamed": "未命名代理服务器",
+      "deleted": "代理服务器已删除",
+      "deletedWithFallback": "代理服务器已删除，{{count}} 个供应商已自动回退到直连",
+      "deleteFailed": "删除代理服务器失败：{{error}}"
     },
     "saveFailedGeneric": "保存失败，请重试"
   },
@@ -1098,7 +1107,12 @@
     "fetchModelsAuthFailed": "API Key 无效或无权限",
     "fetchModelsNotSupported": "该供应商不支持获取模型列表",
     "fetchModelsEndpointNotFound": "未找到可用的模型列表端点，请检查 Base URL 或确认供应商是否开放该接口",
-    "fetchModelsTimeout": "请求超时，请检查网络连接"
+    "fetchModelsTimeout": "请求超时，请检查网络连接",
+    "proxyServer": "代理服务器",
+    "proxyDirect": "直连模式（不使用代理）",
+    "proxyHint": "选中后，仅该供应商会使用此代理。不选则保持直连。",
+    "proxyPoolEmpty": "尚未配置任何代理服务器。该供应商将使用直连。",
+    "proxyOpenSettings": "配置代理服务器"
   },
   "copilot": {
     "authSection": "GitHub Copilot 认证",

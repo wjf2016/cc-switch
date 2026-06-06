@@ -120,6 +120,25 @@ impl Database {
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS proxy_servers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                url TEXT NOT NULL UNIQUE,
+                sort_index INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_servers_sort
+             ON proxy_servers(sort_index, created_at, id)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
         // 8. Proxy Config 表（三行结构，app_type 主键）
         conn.execute("CREATE TABLE IF NOT EXISTS proxy_config (
             app_type TEXT PRIMARY KEY CHECK (app_type IN ('claude','codex','gemini')),
@@ -430,6 +449,11 @@ impl Database {
                         log::info!("迁移数据库从 v9 到 v10（添加 Hermes Agent 支持）");
                         Self::migrate_v9_to_v10(conn)?;
                         Self::set_user_version(conn, 10)?;
+                    }
+                    10 => {
+                        log::info!("迁移数据库从 v10 到 v11（新增代理服务器池表）");
+                        Self::migrate_v10_to_v11(conn)?;
+                        Self::set_user_version(conn, 11)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1197,6 +1221,29 @@ impl Database {
         }
 
         log::info!("v9 -> v10 迁移完成：已添加 Hermes Agent 支持");
+        Ok(())
+    }
+
+    /// v10 -> v11 迁移：新增代理服务器池表
+    fn migrate_v10_to_v11(conn: &Connection) -> Result<(), AppError> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS proxy_servers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                url TEXT NOT NULL UNIQUE,
+                sort_index INTEGER,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_servers_sort
+             ON proxy_servers(sort_index, created_at, id)",
+            [],
+        )
+        .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
 

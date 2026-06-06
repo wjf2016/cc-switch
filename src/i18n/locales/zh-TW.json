@@ -342,8 +342,8 @@
         "description": "管理各模型 Token 計費規則"
       },
       "globalProxy": {
-        "title": "全域出站代理伺服器",
-        "description": "設定 CC Switch 存取外部 API 時使用的代理伺服器"
+        "title": "代理伺服器池",
+        "description": "管理可重複使用的出站代理伺服器，供各供應商選擇"
       },
       "data": {
         "title": "資料管理",
@@ -792,8 +792,8 @@
     "devModeRestartHint": "開發模式下不支援自動重新啟動，請手動重新啟動應用程式。",
     "saving": "正在儲存...",
     "globalProxy": {
-      "label": "全域代理伺服器",
-      "hint": "代理所有請求（API、Skills 下載等）。開啟本地路由時，應用程式的請求也會經過此代理伺服器。留空表示直連。",
+      "label": "代理伺服器池",
+      "hint": "在此處新增可重複使用的代理伺服器。這些條目本身不作為全域代理生效；供應商可以根據需要選擇其中一個代理。留空表示直連。",
       "username": "使用者名稱（選填）",
       "password": "密碼（選填）",
       "test": "測試連線",
@@ -817,7 +817,16 @@
       "pricingSaveFailed": "儲存計費設定失敗：{{error}}",
       "pricingLoadFailed": "載入計費設定失敗：{{error}}",
       "defaultCostMultiplierRequired": "預設倍率不能為空",
-      "defaultCostMultiplierInvalid": "預設倍率格式不正確"
+      "defaultCostMultiplierInvalid": "預設倍率格式不正確",
+      "add": "新增代理伺服器",
+      "empty": "尚未設定代理伺服器，點擊右上角新增即可建立。",
+      "name": "名稱",
+      "namePlaceholder": "例如：辦公代理",
+      "url": "代理地址",
+      "unnamed": "未命名代理伺服器",
+      "deleted": "代理伺服器已刪除",
+      "deletedWithFallback": "代理伺服器已刪除，{{count}} 個供應商已自動回退到直連",
+      "deleteFailed": "刪除代理伺服器失敗：{{error}}"
     },
     "saveFailedGeneric": "儲存失敗，請重試"
   },
@@ -1070,7 +1079,12 @@
     "fetchModelsAuthFailed": "API Key 無效或無權限",
     "fetchModelsNotSupported": "該供應商不支援取得模型清單",
     "fetchModelsEndpointNotFound": "未找到可用的模型清單端點，請檢查 Base URL 或確認供應商是否開放該 API",
-    "fetchModelsTimeout": "請求逾時，請檢查網路連線"
+    "fetchModelsTimeout": "請求逾時，請檢查網路連線",
+    "proxyServer": "代理伺服器",
+    "proxyDirect": "直連模式（不使用代理）",
+    "proxyHint": "選取後，僅該供應商會使用此代理。不選則保持直連。",
+    "proxyPoolEmpty": "尚未設定任何代理伺服器。該供應商將使用直連。",
+    "proxyOpenSettings": "設定代理伺服器"
   },
   "copilot": {
     "authSection": "GitHub Copilot 驗證",

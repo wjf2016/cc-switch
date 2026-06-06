@@ -931,34 +931,12 @@ pub fn run() {
                 log::info!("✓ CodexOAuthManager initialized");
             }
 
-            // 初始化全局出站代理 HTTP 客户端
+            // 初始化默认 HTTP 客户端（供应商级代理在请求转发时按需解析）
             {
-                let db = &app.state::<AppState>().db;
-                let proxy_url = db.get_global_proxy_url().ok().flatten();
-
-                if let Err(e) = crate::proxy::http_client::init(proxy_url.as_deref()) {
+                if let Err(e) = crate::proxy::http_client::init(None) {
                     log::error!(
-                        "[GlobalProxy] [GP-005] Failed to initialize with saved config: {e}"
+                        "[ProxyPool] Failed to initialize default direct HTTP client: {e}"
                     );
-
-                    // 清除无效的代理配置
-                    if proxy_url.is_some() {
-                        log::warn!(
-                            "[GlobalProxy] [GP-006] Clearing invalid proxy config from database"
-                        );
-                        if let Err(clear_err) = db.set_global_proxy_url(None) {
-                            log::error!(
-                                "[GlobalProxy] [GP-007] Failed to clear invalid config: {clear_err}"
-                            );
-                        }
-                    }
-
-                    // 使用直连模式重新初始化
-                    if let Err(fallback_err) = crate::proxy::http_client::init(None) {
-                        log::error!(
-                            "[GlobalProxy] [GP-008] Failed to initialize direct connection: {fallback_err}"
-                        );
-                    }
                 }
             }
 
@@ -988,6 +966,7 @@ pub fn run() {
                 }
 
                 initialize_common_config_snippets(&state);
+                migrate_legacy_global_proxy_to_pool(&state);
 
                 // 检查 settings 表中的代理状态，自动恢复代理服务
                 restore_proxy_state_on_startup(&state).await;
@@ -1381,11 +1360,11 @@ pub fn run() {
             commands::set_hermes_memory,
             commands::get_hermes_memory_limits,
             commands::set_hermes_memory_enabled,
-            // Global upstream proxy
-            commands::get_global_proxy_url,
-            commands::set_global_proxy_url,
+            // Proxy server pool
+            commands::get_proxy_servers,
+            commands::save_proxy_servers,
+            commands::delete_proxy_server,
             commands::test_proxy_url,
-            commands::get_upstream_proxy_status,
             commands::scan_local_proxies,
             // Window theme control
             commands::set_window_theme,
@@ -1733,6 +1712,56 @@ fn initialize_common_config_snippets(state: &store::AppState) {
 
         if let Err(e) = state.db.set_legacy_common_config_migrated(true) {
             log::warn!("✗ Failed to persist legacy common-config migration flag: {e}");
+        }
+    }
+}
+
+fn migrate_legacy_global_proxy_to_pool(state: &store::AppState) {
+    let legacy_url = match state.db.get_global_proxy_url() {
+        Ok(value) => value,
+        Err(e) => {
+            log::warn!("[ProxyPool] Failed to read legacy global proxy setting: {e}");
+            return;
+        }
+    };
+
+    let Some(url) = legacy_url.map(|value| value.trim().to_string()) else {
+        return;
+    };
+
+    if url.is_empty() {
+        return;
+    }
+
+    match state.db.get_proxy_server_by_url(&url) {
+        Ok(Some(_)) => {
+            let _ = state.db.set_global_proxy_url(None);
+            return;
+        }
+        Ok(None) => {}
+        Err(e) => {
+            log::warn!("[ProxyPool] Failed to check existing proxy pool entry: {e}");
+            return;
+        }
+    }
+
+    let now = chrono::Utc::now().timestamp_millis();
+    let proxy_server = crate::database::dao::proxy_servers::ProxyServer {
+        id: format!("legacy-proxy-{}", uuid::Uuid::new_v4()),
+        name: "Migrated Legacy Proxy".to_string(),
+        url: url.clone(),
+        sort_index: Some(0),
+        created_at: now,
+        updated_at: now,
+    };
+
+    match state.db.save_proxy_server(&proxy_server) {
+        Ok(_) => {
+            log::info!("[ProxyPool] Migrated legacy global proxy into proxy pool");
+            let _ = state.db.set_global_proxy_url(None);
+        }
+        Err(e) => {
+            log::warn!("[ProxyPool] Failed to migrate legacy global proxy into proxy pool: {e}");
         }
     }
 }

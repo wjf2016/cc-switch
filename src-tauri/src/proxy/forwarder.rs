@@ -24,7 +24,7 @@ use super::{
 use crate::commands::{CodexOAuthState, CopilotAuthState};
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
-use crate::{app_config::AppType, provider::Provider};
+use crate::{app_config::AppType, database::Database, provider::Provider};
 use futures::StreamExt;
 use http::Extensions;
 use serde_json::Value;
@@ -119,6 +119,7 @@ pub struct RequestForwarder {
     /// `max_attempts = max_retries + 1`，所以 max_retries=0 表示仅尝试一家、
     /// max_retries=3（默认）表示最多 4 家。loop 同时受 providers.len() 自然限制。
     max_attempts: usize,
+    db: Option<Arc<Database>>,
 }
 
 impl RequestForwarder {
@@ -170,6 +171,7 @@ impl RequestForwarder {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         router: Arc<ProviderRouter>,
+        db: Option<Arc<Database>>,
         non_streaming_timeout: u64,
         status: Arc<RwLock<ProxyStatus>>,
         current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
@@ -209,6 +211,35 @@ impl RequestForwarder {
                 streaming_first_byte_timeout,
             ),
             max_attempts,
+            db,
+        }
+    }
+
+    fn resolve_provider_proxy_url(&self, provider: &Provider) -> Option<String> {
+        let proxy_server_id = provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.proxy_server_id.as_ref())?;
+        let db = self.db.as_ref()?;
+        match db.get_proxy_server_by_id(proxy_server_id) {
+            Ok(Some(proxy_server)) => Some(proxy_server.url),
+            Ok(None) => {
+                log::warn!(
+                    "[ProviderProxy] proxyServerId={} not found for provider={}",
+                    proxy_server_id,
+                    provider.id
+                );
+                None
+            }
+            Err(error) => {
+                log::warn!(
+                    "[ProviderProxy] failed to load proxyServerId={} for provider={}: {}",
+                    proxy_server_id,
+                    provider.id,
+                    error
+                );
+                None
+            }
         }
     }
 
@@ -1795,7 +1826,7 @@ impl RequestForwarder {
         };
 
         // 获取全局代理 URL
-        let upstream_proxy_url: Option<String> = super::http_client::get_current_proxy_url();
+        let upstream_proxy_url = self.resolve_provider_proxy_url(provider);
 
         // SOCKS5 代理不支持 CONNECT 隧道，需要用 reqwest
         let is_socks_proxy = upstream_proxy_url
@@ -1817,7 +1848,9 @@ impl RequestForwarder {
             log::debug!(
                 "[Forwarder] Using pooled reqwest client (preserve_exact_header_case={preserve_exact_header_case}, socks_proxy={is_socks_proxy})"
             );
-            let client = super::http_client::get();
+            let client =
+                super::http_client::get_for_provider(provider, upstream_proxy_url.as_deref())
+                    .map_err(ProxyError::ForwardFailed)?;
             let mut request = client.request(method.clone(), &url);
             if request_is_streaming {
                 // reqwest 的 timeout 是整请求超时；流式请求交给 response_processor

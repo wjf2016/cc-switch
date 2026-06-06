@@ -1,19 +1,38 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
 }));
 
-const mutateAsyncMock = vi.fn();
+const saveMutateAsyncMock = vi.fn();
+const deleteMutateAsyncMock = vi.fn();
 const testMutateAsyncMock = vi.fn();
 const scanMutateAsyncMock = vi.fn();
 
 vi.mock("@/hooks/useGlobalProxy", () => ({
-  useGlobalProxyUrl: () => ({ data: "http://127.0.0.1:7890", isLoading: false }),
-  useSetGlobalProxyUrl: () => ({
-    mutateAsync: mutateAsyncMock,
+  useProxyServers: () => ({
+    data: [
+      {
+        id: "proxy-1",
+        name: "Office Proxy",
+        url: "http://127.0.0.1:7890",
+        sortIndex: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    isLoading: false,
+  }),
+  useSaveProxyServers: () => ({
+    mutateAsync: saveMutateAsyncMock,
+    isPending: false,
+  }),
+  useDeleteProxyServer: () => ({
+    mutateAsync: deleteMutateAsyncMock,
     isPending: false,
   }),
   useTestProxy: () => ({
@@ -28,56 +47,65 @@ vi.mock("@/hooks/useGlobalProxy", () => ({
 
 describe("GlobalProxySettings", () => {
   beforeEach(() => {
-    mutateAsyncMock.mockReset();
+    saveMutateAsyncMock.mockReset();
+    deleteMutateAsyncMock.mockReset();
     testMutateAsyncMock.mockReset();
     scanMutateAsyncMock.mockReset();
+    scanMutateAsyncMock.mockResolvedValue([]);
   });
 
-  it("renders proxy URL input with saved value", async () => {
+  it("renders existing proxy servers", async () => {
     render(<GlobalProxySettings />);
 
-    const urlInput = screen.getByPlaceholderText(
-      "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
-    );
-    // URL 对象会在末尾添加斜杠
+    expect(screen.getByDisplayValue("Office Proxy")).toBeInTheDocument();
     await waitFor(() =>
-      expect(urlInput).toHaveValue("http://127.0.0.1:7890/"),
+      expect(
+        screen.getByDisplayValue("http://127.0.0.1:7890/"),
+      ).toBeInTheDocument(),
     );
   });
 
-  it("saves proxy URL when save button is clicked", async () => {
+  it("saves a single proxy server", async () => {
     render(<GlobalProxySettings />);
 
-    const urlInput = screen.getByPlaceholderText(
-      "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
-    );
+    fireEvent.change(screen.getByDisplayValue("Office Proxy"), {
+      target: { value: "Office Proxy Backup" },
+    });
 
-    fireEvent.change(urlInput, { target: { value: "http://localhost:8080" } });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
 
-    const saveButton = screen.getByRole("button", { name: "common.save" });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalled());
-    // 没有用户名时，URL 不经过 URL 对象解析，所以没有尾部斜杠
-    expect(mutateAsyncMock).toHaveBeenCalledWith("http://localhost:8080");
+    await waitFor(() => expect(saveMutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(saveMutateAsyncMock).toHaveBeenCalledWith([
+      {
+        id: "proxy-1",
+        name: "Office Proxy Backup",
+        url: "http://127.0.0.1:7890/",
+        sortIndex: 1,
+      },
+    ]);
   });
 
-  it("clears proxy URL when clear button is clicked", async () => {
+  it("deletes an existing proxy server", async () => {
     render(<GlobalProxySettings />);
 
-    const urlInput = screen.getByPlaceholderText(
-      "http://127.0.0.1:7890 / socks5://127.0.0.1:1080",
-    );
+    fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
 
-    // Wait for initial value to load
     await waitFor(() =>
-      expect(urlInput).toHaveValue("http://127.0.0.1:7890/"),
+      expect(deleteMutateAsyncMock).toHaveBeenCalledWith("proxy-1"),
+    );
+  });
+
+  it("tests the normalized proxy url", async () => {
+    render(<GlobalProxySettings />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings.globalProxy.test" }),
     );
 
-    // Click clear button
-    const clearButton = screen.getByTitle("settings.globalProxy.clear");
-    fireEvent.click(clearButton);
-
-    expect(urlInput).toHaveValue("");
+    await waitFor(() =>
+      expect(testMutateAsyncMock).toHaveBeenCalledWith(
+        "http://127.0.0.1:7890/",
+      ),
+    );
   });
 });

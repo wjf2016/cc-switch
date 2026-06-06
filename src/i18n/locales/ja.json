@@ -342,8 +342,8 @@
         "description": "各モデルのトークン料金ルールを管理"
       },
       "globalProxy": {
-        "title": "グローバル送信プロキシ",
-        "description": "CC Switch が外部 API にアクセスする際のプロキシを設定"
+        "title": "プロキシサーバープール",
+        "description": "プロバイダーごとに選択可能な、再利用可能な送信プロキシサーバーを管理します"
       },
       "data": {
         "title": "データ管理",
@@ -821,15 +821,15 @@
     "devModeRestartHint": "開発モードでは自動再起動をサポートしていません。手動で再起動してください。",
     "saving": "保存中...",
     "globalProxy": {
-      "label": "グローバルプロキシ",
-      "hint": "すべてのリクエスト（API、Skills ダウンロードなど）をプロキシ経由で送信します。ローカルルーティング有効時、アプリのリクエストもこのプロキシを経由します。空欄で直接接続。",
+      "label": "プロキシサーバープール",
+      "hint": "再利用可能なプロキシサーバーをここに追加します。これらのエントリーは単体でグローバルプロキシとしては機能しません。プロバイダーは必要に応じてこのプールから選択できます。",
       "username": "ユーザー名（任意）",
       "password": "パスワード（任意）",
       "test": "接続テスト",
       "scan": "ローカルプロキシをスキャン",
       "clear": "クリア",
       "scanFailed": "スキャンに失敗しました: {{error}}",
-      "saved": "ルーティング設定を保存しました",
+      "saved": "プロキシサーバーを保存しました",
       "saveFailed": "保存に失敗しました: {{error}}",
       "testSuccess": "接続成功！遅延 {{latency}}ms",
       "testFailed": "接続に失敗しました: {{error}}",
@@ -846,7 +846,16 @@
       "pricingSaveFailed": "課金設定の保存に失敗しました: {{error}}",
       "pricingLoadFailed": "課金設定の読み込みに失敗しました: {{error}}",
       "defaultCostMultiplierRequired": "デフォルト倍率は必須です",
-      "defaultCostMultiplierInvalid": "デフォルト倍率の形式が正しくありません"
+      "defaultCostMultiplierInvalid": "デフォルト倍率の形式が正しくありません",
+      "add": "プロキシサーバーを追加",
+      "empty": "プロキシサーバーが設定されていません。右上の「追加」をクリックして作成してください。",
+      "name": "名前",
+      "namePlaceholder": "例: オフィスのプロキシ",
+      "url": "プロキシ URL",
+      "unnamed": "未命名のプロキシサーバー",
+      "deleted": "プロキシサーバーを削除しました",
+      "deletedWithFallback": "プロキシサーバーを削除しました。{{count}}個のプロバイダーが自動的に直接接続に戻りました",
+      "deleteFailed": "プロキシサーバーの削除に失敗しました: {{error}}"
     },
     "saveFailedGeneric": "保存に失敗しました。もう一度お試しください"
   },
@@ -1098,7 +1107,12 @@
     "fetchModelsAuthFailed": "API Key が無効か、権限がありません",
     "fetchModelsNotSupported": "このプロバイダーはモデル一覧の取得に対応していません",
     "fetchModelsEndpointNotFound": "利用可能なモデル一覧エンドポイントが見つかりません。Base URL を確認するか、プロバイダーが該当 API を公開しているかご確認ください",
-    "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください"
+    "fetchModelsTimeout": "リクエストがタイムアウトしました。ネットワーク接続を確認してください",
+    "proxyServer": "プロキシサーバー",
+    "proxyDirect": "直接接続（プロキシなし）",
+    "proxyHint": "選択すると、このプロバイダーのみがプロキシを使用します。選択しない場合は直接接続を維持します。",
+    "proxyPoolEmpty": "プロキシサーバーが設定されていません。このプロバイダーは直接接続を使用します。",
+    "proxyOpenSettings": "プロキシサーバーを設定"
   },
   "copilot": {
     "authSection": "GitHub Copilot 認証",

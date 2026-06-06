@@ -3,6 +3,7 @@
 //! 提供支持全局代理配置的 HTTP 客户端。
 //! 所有需要发送 HTTP 请求的模块都应使用此模块提供的客户端。
 
+use crate::provider::Provider;
 use once_cell::sync::OnceCell;
 use reqwest::Client;
 use std::env;
@@ -210,6 +211,21 @@ pub fn get_current_proxy_url() -> Option<String> {
 #[allow(dead_code)]
 pub fn is_proxy_enabled() -> bool {
     get_current_proxy_url().is_some()
+}
+
+/// 为指定 Provider 构建 HTTP 客户端。
+///
+/// 供应商显式绑定代理时使用该代理；否则走默认直连/系统代理逻辑。
+pub fn get_for_provider(provider: &Provider, proxy_url: Option<&str>) -> Result<Client, String> {
+    let client = build_client(proxy_url)?;
+    if let Some(url) = proxy_url {
+        log::debug!(
+            "[ProviderProxy] Using bound proxy for provider={} -> {}",
+            provider.id,
+            mask_url(url)
+        );
+    }
+    Ok(client)
 }
 
 /// 构建 HTTP 客户端

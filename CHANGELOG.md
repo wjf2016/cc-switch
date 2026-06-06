@@ -5,6 +5,27 @@ All notable changes to CC Switch will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.1.1] - 2026-06-05
+
+Development since v3.16.1 focuses on introducing a multi-proxy server pool (Proxy Pool) for reusable outbound proxies, allowing providers to explicitly bind to specific proxy servers, providing auto-migration from the legacy single global proxy, and streamlining Windows build configurations.
+
+**Stats**: 6 commits | 29 files changed | +1,208 insertions | -458 deletions
+
+### Added
+
+- **Multi-Proxy Server Pool (Proxy Pool)**: Replaced the single global proxy with a reusable proxy server pool, allowing users to configure, test, and delete multiple outbound proxies.
+- **Provider-Level Proxy Binding**: Added the ability to bind individual providers (Claude Code, Claude Desktop, Codex, Gemini, etc.) to a specific proxy server from the pool, falling back to direct connection when unbound or if the proxy is deleted.
+- **Auto-Migration of Legacy Proxy**: Added startup database migration that converts the legacy single global proxy configuration into an entry in the new proxy pool automatically.
+
+### Changed
+
+- **Global Proxy Settings Restructured**: Reorganized the Proxy settings tab to manage the server pool (add, edit, test, delete) and display utilization warnings when deleting proxy servers mapped to active providers.
+- **Provider Forms Updated**: Integrated the `ProviderProxySelector` component across all provider dialogs and presets (including Claude Desktop config) with sensitive credential masking in the UI.
+
+### Fixed
+
+- **Windows Build Linker Failure**: Added dynamic `mt.exe` resolving and copy logic in `build.rs` and structured `.cargo/config.toml` variables, addressing MSVC environment linker errors under non-VS terminal environments.
+
 ## [3.16.1] - 2026-06-01
 
 Development since v3.16.0 focuses on hardening Codex provider switching and Local Routing takeover: preserving official OAuth auth and model catalogs across normal switches, hot-switches, backup restore, and edit flows; restoring Codex Chat tool/plugin compatibility over Chat Completions upstreams; improving Codex proxy diagnostics and CLI discovery; and documenting DeepSeek routing.
@@ -59,7 +80,7 @@ Development since v3.15.0 focuses on making third-party Codex providers work lik
 - **22 Codex Third-Party Provider Presets with Chat Routing**: Enabled Chat Completions routing with explicit model catalogs for major Chinese/Asian providers — DeepSeek, Zhipu GLM (+ en), Kimi, MiniMax (+ en), StepFun (+ en), Baidu Qianfan Coding Plan, Bailian, ModelScope, Longcat, BaiLing, Xiaomi MiMo (+ Token Plan), Volcengine Agentplan, BytePlus, DouBao Seed, SiliconFlow (+ en), Novita AI, and Nvidia. Each preset declares its context window so the UI can size the model-mapping rows.
 - **Codex Model Mapping Table**: Codex provider forms now expose a model catalog (model + display name + context window per row) that is the single source of truth for the upstream model list, projected to `~/.codex/cc-switch-model-catalog.json`.
 - **Codex Chat Providers in Stream Check**: Stream Check now probes Chat-format Codex providers against `/chat/completions` with a Chat-shaped body instead of `/v1/responses`, and aligns its URL fallback order with the production `CodexAdapter` (origin-only base URLs hit `/v1/<endpoint>` first) so a non-404 error on the bare path no longer flags a working provider as down.
-- **Codex Chat Reasoning Auto-Detection**: When a Codex provider is served through Chat Completions routing, CC Switch now auto-detects the upstream's reasoning interface from its name, base URL, and model — injecting the correct thinking parameter (`thinking:{type}`, `enable_thinking`, `reasoning_split`, top-level `reasoning_effort`, or OpenRouter's native `reasoning:{effort}` object) with no manual setup. Aggregator/hosting platforms (OpenRouter, SiliconFlow) are matched platform-first, since the same model can expose different reasoning controls on different platforms. Providers that only expose a thinking on/off switch (Kimi, GLM, Qwen, MiniMax, MiMo, SiliconFlow) drop the effort *level* instead of forwarding an unsupported field — so changing Codex's reasoning effort has no effect for them — while providers with real effort tiers (DeepSeek, OpenRouter, and StepFun's `step-3.5-flash-2603` only) pass the level through. OpenRouter specifically uses the native `reasoning:{effort}` object, clamps `max` to `xhigh` (its enum has no `max`), and forwards an explicit `effort:"none"` so reasoning can be turned off.
+- **Codex Chat Reasoning Auto-Detection**: When a Codex provider is served through Chat Completions routing, CC Switch now auto-detects the upstream's reasoning interface from its name, base URL, and model — injecting the correct thinking parameter (`thinking:{type}`, `enable_thinking`, `reasoning_split`, top-level `reasoning_effort`, or OpenRouter's native `reasoning:{effort}` object) with no manual setup. Aggregator/hosting platforms (OpenRouter, SiliconFlow) are matched platform-first, since the same model can expose different reasoning controls on different platforms. Providers that only expose a thinking on/off switch (Kimi, GLM, Qwen, MiniMax, MiMo, SiliconFlow) drop the effort _level_ instead of forwarding an unsupported field — so changing Codex's reasoning effort has no effect for them — while providers with real effort tiers (DeepSeek, OpenRouter, and StepFun's `step-3.5-flash-2603` only) pass the level through. OpenRouter specifically uses the native `reasoning:{effort}` object, clamps `max` to `xhigh` (its enum has no `max`), and forwards an explicit `effort:"none"` so reasoning can be turned off.
 - **Codex Goal Mode and Remote Compaction Controls**: Codex config editing now exposes a Goal Mode toggle and a Remote Compaction toggle for third-party providers; new Codex templates default to `disable_response_storage = true` while still allowing explicit goal support.
 - **Xiaomi MiMo Token Plan Presets**: Added Xiaomi MiMo Token Plan presets with specs aligned to the official documentation (#2803).
 - **Claude Desktop Official Preset**: Added a Claude Desktop Official preset that restores the native Claude Desktop login, plus a localized Claude Desktop user guide (en / zh / ja).
@@ -356,7 +377,7 @@ Development since v3.13.0 focuses on onboarding Hermes Agent as a first-class ma
 - **Skills Import Sync**: Imported Skills are now immediately synced into enabled app directories instead of only being recorded in the database, so the UI no longer shows "installed" while the target app directory is missing the skill.
 - **Ghostty Session Restore**: Fixed Ghostty session restore launch by using shell execution with `--working-directory`, avoiding `cwd` escaping issues when the path contains spaces or special characters.
 - **Hermes Health Check Borrowing OpenClaw Schema**: Hermes providers were routed through `check_additive_app_stream` (the OpenClaw dispatcher), which reads camelCase `baseUrl` / `apiKey` / `api` and surfaced "OpenClaw provider is missing baseUrl" even when every Hermes field was filled. Introduced `check_hermes_stream` with Hermes-specific extractors that map `api_mode` (`chat_completions` / `anthropic_messages` / `codex_responses`) to the matching `check_claude_stream` `api_format`, and returns `bedrock_converse` as unsupported. `api_mode` is now resolved before URL / API key extraction, so `bedrock_converse` users see the real cause rather than a misleading "missing base_url".
-- **Usage Query Modal for Hermes & OpenClaw**: `getProviderCredentials` now reads flat `settingsConfig` fields for Hermes (snake_case `base_url` / `api_key`) and OpenClaw (camelCase `baseUrl` / `apiKey`), so the "official balance" template auto-selects for matching providers like SiliconFlow. Also refactored the BALANCE and TOKEN_PLAN test paths to reuse the precomputed `providerCredentials` instead of re-reading `env.ANTHROPIC_*` directly, fixing the "empty key" error for non-Claude apps even when the key was configured.
+- **Usage Query Modal for Hermes & OpenClaw**: `getProviderCredentials` now reads flat `settingsConfig` fields for Hermes (snake*case `base_url` / `api_key`) and OpenClaw (camelCase `baseUrl` / `apiKey`), so the "official balance" template auto-selects for matching providers like SiliconFlow. Also refactored the BALANCE and TOKEN_PLAN test paths to reuse the precomputed `providerCredentials` instead of re-reading `env.ANTHROPIC*\*` directly, fixing the "empty key" error for non-Claude apps even when the key was configured.
 
 ### Docs
 
@@ -1157,23 +1178,28 @@ Third beta release with important bug fixes for Windows compatibility, UI improv
 ### Fixed
 
 #### Windows
+
 - Wrap npx/npm commands with `cmd /c` for MCP export
 - Prevent terminal windows from appearing during version check
 
 #### macOS
+
 - Use .app bundle path for autostart to prevent terminal window popup
 
 #### UI
+
 - Resolve Dialog/Modal not opening on first click (#492)
 - Improve dark mode text contrast for form labels
 - Reduce header spacing and fix layout shift on view switch
 - Prevent header layout shift when switching views
 
 #### Database & Schema
+
 - Add missing base columns migration for proxy_config
 - Add backward compatibility check for proxy_config seed insert
 
 #### Other
+
 - Use local timezone and robust DST handling in usage stats (#500)
 - Remove deprecated `sync_enabled_to_codex` call
 - Gracefully handle invalid Codex config.toml during MCP sync
@@ -1232,28 +1258,33 @@ This beta release introduces the **Local API Proxy** feature, along with Skills 
 ### Major Features
 
 #### Local Proxy Server
+
 - **Local HTTP Proxy** - High-performance proxy server built on Axum framework
 - **Multi-app Support** - Unified proxy for Claude Code, Codex, and Gemini CLI API requests
 - **Per-app Takeover** - Independent control over which apps route through the proxy
 - **Live Config Takeover** - Automatically backs up and redirects CLI configurations to local proxy
 
 #### Auto Failover
+
 - **Circuit Breaker** - Automatically detects provider failures and triggers protection
 - **Smart Failover** - Automatically switches to backup provider when current one is unavailable
 - **Health Tracking** - Real-time monitoring of provider availability
 - **Independent Failover Queues** - Each app maintains its own failover queue
 
 #### Monitoring
+
 - **Request Logging** - Detailed logging of all proxy requests
 - **Usage Statistics** - Token consumption, latency, success rate metrics
 - **Real-time Status** - Frontend displays proxy status and statistics
 
 #### Skills Multi-App Support
+
 - **Multi-app Support** - Skills now support both Claude and Codex (#365)
 - **Multi-app Migration** - Existing Skills auto-migrate to multi-app structure (#378)
 - **Installation Path Fix** - Use directory basename for skill installation path (#358)
 
 ### Added
+
 - **Provider Icon Colors** - Customize provider icon colors (#385)
 - **Deeplink Usage Config** - Import usage query config via deeplink (#400)
 - **Error Request Logging** - Detailed logging for proxy requests (#401)
@@ -1263,6 +1294,7 @@ This beta release introduces the **Local API Proxy** feature, along with Skills 
 ### Fixed
 
 #### Proxy Related
+
 - Takeover Codex base_url via model_provider
 - Harden crash recovery with fallback detection
 - Sync UI when active provider differs from current setting
@@ -1280,17 +1312,20 @@ This beta release introduces the **Local API Proxy** feature, along with Skills 
 - Resolve 404 error and auto-setup proxy targets
 
 #### MCP Related
+
 - Skip sync when target CLI app is not installed
 - Improve upsert and import robustness
 - Use browser-compatible platform detection for MCP presets
 
 #### UI Related
+
 - Restore fade transition for Skills button
 - Add close button to all success toasts
 - Prevent card jitter when health badge appears
 - Update SettingsPage tab styles (#342)
 
 #### Other
+
 - Fix Azure website link (#407)
 - Add fallback to provider config for usage credentials (#360)
 - Fix Windows black screen on startup (use system titlebar)
@@ -1299,11 +1334,13 @@ This beta release introduces the **Local API Proxy** feature, along with Skills 
 - Security fixes for JavaScript executor and usage script (#151)
 
 ### Improved
+
 - **Proxy Active Theme** - Apply emerald theme when proxy takeover is active
 - **Card Animation** - Improved provider card hover animation
 - **Remove Restart Prompt** - No longer prompts restart when switching providers
 
 ### Technical
+
 - Implement per-app takeover mode
 - Proxy module contains 20+ Rust files with complete layered architecture
 - Add 5 new database tables for proxy functionality
@@ -1311,6 +1348,7 @@ This beta release introduces the **Local API Proxy** feature, along with Skills 
 - Remove is_proxy_target in favor of failover_queue
 
 ### Stats
+
 - 55 commits since v3.8.2
 - 164 files changed
 - +22,164 / -570 lines

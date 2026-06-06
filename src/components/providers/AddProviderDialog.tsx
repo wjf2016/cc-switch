@@ -26,6 +26,7 @@ interface AddProviderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appId: AppId;
+  onOpenProxySettings?: () => void;
   onSubmit: (
     provider: Omit<Provider, "id"> & {
       providerKey?: string;
@@ -39,6 +40,7 @@ export function AddProviderDialog({
   open,
   onOpenChange,
   appId,
+  onOpenProxySettings,
   onSubmit,
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
@@ -343,6 +345,7 @@ export function AddProviderDialog({
               submitLabel={t("common.add")}
               onSubmit={handleSubmit}
               onCancel={() => onOpenChange(false)}
+              onOpenProxySettings={onOpenProxySettings}
               onSubmittingChange={setIsFormSubmitting}
               showButtons={false}
             />
@@ -359,6 +362,7 @@ export function AddProviderDialog({
           submitLabel={t("common.add")}
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
+          onOpenProxySettings={onOpenProxySettings}
           onSubmittingChange={setIsFormSubmitting}
           showButtons={false}
         />

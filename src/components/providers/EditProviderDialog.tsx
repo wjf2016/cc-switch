@@ -14,6 +14,7 @@ interface EditProviderDialogProps {
   open: boolean;
   provider: Provider | null;
   onOpenChange: (open: boolean) => void;
+  onOpenProxySettings?: () => void;
   onSubmit: (payload: {
     provider: Provider;
     originalId?: string;
@@ -26,6 +27,7 @@ export function EditProviderDialog({
   open,
   provider,
   onOpenChange,
+  onOpenProxySettings,
   onSubmit,
   appId,
   isProxyTakeover = false,
@@ -244,6 +246,7 @@ export function EditProviderDialog({
         submitLabel={t("common.save")}
         onSubmit={handleSubmit}
         onCancel={() => onOpenChange(false)}
+        onOpenProxySettings={onOpenProxySettings}
         onSubmittingChange={setIsFormSubmitting}
         initialData={initialData}
         showButtons={false}
