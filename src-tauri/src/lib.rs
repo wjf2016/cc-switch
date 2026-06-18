@@ -85,6 +85,94 @@ fn set_windows_app_user_model_id(app: &tauri::AppHandle) {
     }
 }
 
+/// 判断 Windows 自定义协议是否需要注册或刷新
+///
+/// 检查 HKEY_CURRENT_USER\Software\Classes\<scheme>\shell\open\command
+/// 中的 exe 路径是否指向当前运行的程序。
+#[cfg(target_os = "windows")]
+fn should_register_windows_protocol(scheme: &str) -> bool {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let current_exe = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            log::warn!("获取当前程序路径失败，将尝试重新注册协议: {e}");
+            return true;
+        }
+    };
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let subkey_path = format!("Software\\Classes\\{}\\shell\\open\\command", scheme);
+
+    let command = match hkcu
+        .open_subkey(&subkey_path)
+        .and_then(|key| key.get_value::<String, _>(""))
+    {
+        Ok(command) => command,
+        Err(e) => {
+            log::debug!("协议 '{}' 未注册或缺少启动命令，将注册: {e}", scheme);
+            return true;
+        }
+    };
+
+    let registered_exe = match extract_windows_command_exe_path(&command) {
+        Some(path) => path,
+        None => {
+            log::warn!("无法解析协议 '{}' 的启动命令，将重新注册: {}", scheme, command);
+            return true;
+        }
+    };
+
+    let current_exe = normalize_windows_path_for_compare(current_exe);
+    let registered_exe = normalize_windows_path_for_compare(registered_exe);
+
+    if current_exe == registered_exe {
+        log::debug!("协议 '{}' 已指向当前程序: {}", scheme, current_exe);
+        false
+    } else {
+        log::info!(
+            "协议 '{}' 指向的程序路径已变化，将重新注册: old={}, current={}",
+            scheme,
+            registered_exe,
+            current_exe
+        );
+        true
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn extract_windows_command_exe_path(command: &str) -> Option<std::path::PathBuf> {
+    let command = command.trim();
+    if command.is_empty() {
+        return None;
+    }
+
+    if let Some(rest) = command.strip_prefix('"') {
+        let end = rest.find('"')?;
+        return Some(std::path::PathBuf::from(&rest[..end]));
+    }
+
+    let command_lower = command.to_ascii_lowercase();
+    if let Some(index) = command_lower.find(".exe") {
+        return Some(std::path::PathBuf::from(&command[..index + 4]));
+    }
+
+    command
+        .split_whitespace()
+        .next()
+        .map(std::path::PathBuf::from)
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_path_for_compare(path: std::path::PathBuf) -> String {
+    std::fs::canonicalize(&path)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_lowercase()
+}
+
 fn redact_url_for_log(url_str: &str) -> String {
     match url::Url::parse(url_str) {
         Ok(url) => {
@@ -771,8 +859,8 @@ pub fn run() {
             // 注册 deep-link URL 处理器（使用正确的 DeepLinkExt API）
             log::info!("=== Registering deep-link URL handler ===");
 
-            // Linux 和 Windows 调试模式需要显式注册
-            #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+            // Linux 和 Windows 需要显式注册
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
             {
                 #[cfg(target_os = "linux")]
                 {
@@ -796,12 +884,20 @@ pub fn run() {
                     }
                 }
 
-                #[cfg(all(debug_assertions, windows))]
+                #[cfg(target_os = "windows")]
                 {
-                    if let Err(e) = app.deep_link().register_all() {
-                        log::error!("✗ Failed to register deep link schemes: {}", e);
+                    // Windows 平台：协议未注册或 exe 路径变化时静默注册
+                    // 这对便携版（--no-bundle）尤其重要，因为没有安装程序来注册协议
+                    let should_register = should_register_windows_protocol("ccswitch");
+
+                    if should_register {
+                        if let Err(e) = app.deep_link().register_all() {
+                            log::error!("✗ Failed to register deep link schemes: {}", e);
+                        } else {
+                            log::info!("✓ Deep link schemes registered (Windows)");
+                        }
                     } else {
-                        log::info!("✓ Deep link schemes registered (Windows debug)");
+                        log::info!("⊘ Deep link protocol already registered, skipping registration");
                     }
                 }
             }
