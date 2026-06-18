@@ -695,6 +695,36 @@ pub fn apply_tray_policy(app: &tauri::AppHandle, dock_visible: bool) {
     }
 }
 
+fn recover_blank_main_window(window: tauri::WebviewWindow) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+        let script = r#"
+            (() => {
+                const checkBlankRoot = () => {
+                    const root = document.getElementById("root");
+                    if (!root || root.childElementCount > 0 || root.textContent.trim()) {
+                        return;
+                    }
+                    console.warn("[Tray] Blank main window detected, reloading webview");
+                    window.location.reload();
+                };
+
+                if (document.readyState === "complete") {
+                    checkBlankRoot();
+                    return;
+                }
+
+                window.addEventListener("load", () => setTimeout(checkBlankRoot, 100), { once: true });
+            })();
+        "#;
+
+        if let Err(e) = window.eval(script) {
+            log::warn!("[Tray] Failed to check main window render state: {e}");
+        }
+    });
+}
+
 /// 处理托盘菜单事件
 pub fn handle_tray_menu_event(app: &tauri::AppHandle, event_id: &str) {
     log::info!("处理托盘菜单事件: {event_id}");
@@ -713,6 +743,7 @@ pub fn handle_tray_menu_event(app: &tauri::AppHandle, event_id: &str) {
                 {
                     crate::linux_fix::nudge_main_window(window.clone());
                 }
+                recover_blank_main_window(window);
                 #[cfg(target_os = "macos")]
                 {
                     apply_tray_policy(app, true);
