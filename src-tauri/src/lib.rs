@@ -16,8 +16,6 @@ mod gemini_mcp;
 pub mod hermes_config;
 mod init_status;
 mod lightweight;
-#[cfg(target_os = "linux")]
-mod linux_fix;
 mod mcp;
 mod openclaw_config;
 mod opencode_config;
@@ -31,6 +29,8 @@ mod services;
 mod session_manager;
 mod settings;
 mod store;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod window_fix;
 
 mod tray;
 mod usage_events;
@@ -247,9 +247,9 @@ fn handle_deeplink_url(
                     let _ = window.unminimize();
                     let _ = window.show();
                     let _ = window.set_focus();
-                    #[cfg(target_os = "linux")]
+                    #[cfg(any(target_os = "linux", target_os = "windows"))]
                     {
-                        linux_fix::nudge_main_window(window.clone());
+                        window_fix::nudge_main_window(window.clone());
                     }
                     log::info!("✓ Window shown and focused");
                 }
@@ -348,9 +348,9 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
-                #[cfg(target_os = "linux")]
+                #[cfg(any(target_os = "linux", target_os = "windows"))]
                 {
-                    linux_fix::nudge_main_window(window.clone());
+                    window_fix::nudge_main_window(window.clone());
                 }
             }
         }));
@@ -1211,9 +1211,9 @@ pub fn run() {
                     // Linux: 解决首次启动 UI 无响应问题（Tauri #10746 + wry #637）。
                     // 启动时 webview 未获取焦点 + surface 尺寸协商失败，导致点击无效。
                     // 这里做 set_focus + 伪 resize，等价于无视觉版本的"最大化-还原"。
-                    #[cfg(target_os = "linux")]
+                    #[cfg(any(target_os = "linux", target_os = "windows"))]
                     {
-                        linux_fix::nudge_main_window(window.clone());
+                        window_fix::nudge_main_window(window.clone());
                     }
                 }
             }
