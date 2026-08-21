@@ -50,7 +50,9 @@ export function ProviderProxySelector({
 
   return (
     <div className="space-y-2">
-      <Label>{t("provider.proxyServer", { defaultValue: "代理服务器" })}</Label>
+      <Label>
+        {t("providerForm.proxyServer", { defaultValue: "代理服务器" })}
+      </Label>
 
       {isLoading ? (
         <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -66,14 +68,14 @@ export function ProviderProxySelector({
           >
             <SelectTrigger>
               <SelectValue
-                placeholder={t("provider.proxyDirect", {
+                placeholder={t("providerForm.proxyDirect", {
                   defaultValue: "直连（不使用代理）",
                 })}
               />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={DIRECT_CONNECTION_VALUE}>
-                {t("provider.proxyDirect", {
+                {t("providerForm.proxyDirect", {
                   defaultValue: "直连（不使用代理）",
                 })}
               </SelectItem>
@@ -85,7 +87,7 @@ export function ProviderProxySelector({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {t("provider.proxyHint", {
+            {t("providerForm.proxyHint", {
               defaultValue:
                 "选择后仅当前供应商通过该代理访问；不选择则保持直连。",
             })}
@@ -94,7 +96,7 @@ export function ProviderProxySelector({
       ) : (
         <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
           <p>
-            {t("provider.proxyPoolEmpty", {
+            {t("providerForm.proxyPoolEmpty", {
               defaultValue: "未配置代理服务器，当前供应商将保持直连。",
             })}
           </p>
@@ -105,7 +107,7 @@ export function ProviderProxySelector({
               className="mt-1 h-auto p-0"
               onClick={onOpenProxySettings}
             >
-              {t("provider.proxyOpenSettings", {
+              {t("providerForm.proxyOpenSettings", {
                 defaultValue: "去配置代理服务器",
               })}
             </Button>

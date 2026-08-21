@@ -1,4 +1,4 @@
-# 在 Claude Code 中用 Codex：CC Switch 本地路由攻略
+# 通过 CC Switch 在 Claude Code 中使用 GPT 模型
 
 > 适用版本：CC Switch 3.17.0 及以上（更早版本已具备本文两种接入方式，但 gpt-5.6 预设与客户端身份修复自 3.17.0 落地，低版本请求 `gpt-5.6-luna` 这类新模型会误报 404）。本文根据仓库内文档与代码整理，示例数据均已去敏。
 
@@ -75,8 +75,6 @@ CC Switch 的做法是让 Claude Code 始终连本机路由，仍以 Anthropic M
 
 > **注意**：live 配置是 Claude Code 进程启动时读取的。首次开启接管（或关闭接管恢复直连）后，如果 Claude Code 正在运行，请重开一个终端会话。之后在路由模式下切换供应商就是热切换，无需再重启。
 
-<!-- TODO 截图 04：本地路由页面中启用 Claude Code 接管（docs/images/claude-codex-routing/04-local-route-claude-takeover.png）。此图需在「Claude Code 路由已开启」状态下截取，而开启接管会把本机 settings.json 的 base_url 改写为 127.0.0.1，需在不依赖该配置的环境中补拍。 -->
-
 ## 第三步：切换供应商并验证
 
 回到 Claude Code 供应商列表，点击目标供应商的 `启用`。如果路由没有在运行，CC Switch 会提示「此供应商使用 OpenAI Responses 接口格式，需要路由服务才能正常使用，请先启动路由」——这个提示不会拦截切换，但路由未开时请求必然失败，回到第二步打开即可。
@@ -95,7 +93,7 @@ CC Switch 的做法是让 Claude Code 始终连本机路由，仍以 Anthropic M
 - **工具与多模态完整转换**：多轮工具调用、图片与 PDF 输入都被完整转换。
 - **上下文按 200K 窗口管理**：Claude Code 对路由供应商按默认 200K 窗口做自动压缩。上游实际窗口更大时（如 ChatGPT Codex 服务的 gpt-5.6 为 372K），超出 200K 的部分当前不会被用到——压缩会提前触发，保守但安全。想突破 200K，目前唯一的开关是模型映射里的 `1M` 复选框（严格声明 1M），仅限方式一且上游真按 1M 及以上服务该模型时使用；方式二的上游上限是 372K、够不到 1M，勾选反而会让长对话在上游真实上限处报错，请维持默认。
 - **输出上限**：方式二的输出上限由 ChatGPT 服务端控制（Claude Code 请求里的 `max_tokens` 不会下发）；方式一则原样透传 Claude Code 的 `max_tokens`，无需配置。
-- **联网搜索不可用**：Claude Code 的 WebSearch 依赖 Anthropic 服务端执行，GPT 上游无法承接，涉及联网搜索的任务建议切回 Claude 系供应商。本地执行的 WebFetch 不受影响。
+- **内置联网搜索取决于上游支持**：路由会把 Claude Code 的托管 WebSearch 工具转换为 Responses API 的托管 `web_search` 工具，可用于 Codex OAuth 和实现该工具的兼容 Responses 网关。`allowed_domains` 会保留；在 API Key Responses 路由中，`max_uses` 会映射为上游的 `max_tool_calls` 硬限制。Codex OAuth 请求协议会拒绝该字段，因此桥接层会对强制使用托管搜索的请求本地限流：把上限写入模型指令，在额外调用开始时立即终止上游流，并返回 `max_uses_exceeded`；无法安全表示逐工具预算的非强制 Codex 请求则明确失败。由于 Responses 没有等价的拒绝列表，带有非空 `blocked_domains` 的请求也会明确失败。本地执行的 WebFetch 不受影响。
 - **用量看板金额是参考值**：token 计数准确，但美元金额是按公开 API 价折算的估算——方式二订阅流量按 GPT-5.6 公开价折算，方式一的第三方网关按各自费率计费，两者都可能与真实扣费不符，仅供对比。方式二的额度消耗以供应商卡片上的窗口利用率为准。
 
 ## 常见问题
@@ -140,4 +138,4 @@ CC Switch 的做法是让 Claude Code 始终连本机路由，仍以 Anthropic M
 - [CC Switch 用户手册：代理服务](../user-manual/zh/4-proxy/4.1-service.md)
 - [CC Switch 用户手册：应用路由](../user-manual/zh/4-proxy/4.2-routing.md)
 - [CC Switch v3.17.0 发布说明](../release-notes/v3.17.0-zh.md)
-- 反方向攻略：[在 Codex 中用 Claude](./codex-claude-routing-guide-zh.md)
+- 反方向攻略：[在 Codex 中使用 Claude 模型](./codex-claude-routing-guide-zh.md)
