@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Copy,
   Edit,
+  Link2,
   Loader2,
   Minus,
   Play,
@@ -44,6 +45,7 @@ interface ProviderActionsProps {
   onTest?: () => void;
   onConfigureUsage?: () => void;
   onDelete: () => void;
+  onExportLink?: () => void;
   onRemoveFromConfig?: () => void;
   onDisableOmo?: () => void;
   onOpenTerminal?: () => void;
@@ -86,6 +88,7 @@ export function ProviderActions({
   onTest,
   onConfigureUsage,
   onDelete,
+  onExportLink,
   onRemoveFromConfig,
   onDisableOmo,
   onOpenTerminal,
@@ -456,6 +459,18 @@ export function ProviderActions({
             )}
           >
             <Terminal className="h-4 w-4" />
+          </Button>
+        )}
+
+        {onExportLink && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onExportLink}
+            title={t("provider.exportLink")}
+            className={iconButtonClass}
+          >
+            <Link2 className="h-4 w-4" />
           </Button>
         )}
 

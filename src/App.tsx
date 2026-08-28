@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -55,6 +55,8 @@ import {
 } from "@/utils/errorUtils";
 import { isTextEditableTarget } from "@/utils/domUtils";
 import { deepClone } from "@/utils/deepClone";
+import { buildProviderDeepLink } from "@/utils/providerDeepLink";
+import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import {
   isWindows,
@@ -250,6 +252,9 @@ function App() {
   const [confirmAction, setConfirmAction] = useState<{
     provider: Provider;
     action: "remove" | "delete";
+  } | null>(null);
+  const [exportLinkDialog, setExportLinkDialog] = useState<{
+    provider: Provider;
   } | null>(null);
   const [envConflicts, setEnvConflicts] = useState<EnvConflict[]>([]);
   const [showEnvBanner, setShowEnvBanner] = useState(false);
@@ -894,6 +899,41 @@ function App() {
     await addProvider(duplicatedProvider);
   };
 
+  // 导出供应商导入深链接到剪贴板:在浏览器打开即可唤醒 CC Switch 导入。
+  // 弹出二次确认对话框,询问是否包含 API Key(默认否),避免凭据泄露。
+  const handleExportProviderLink = useCallback((provider: Provider) => {
+    setExportLinkDialog({ provider });
+  }, []);
+
+  const confirmExportLink = useCallback(
+    async (replaceWithPlaceholder: boolean) => {
+      if (!exportLinkDialog) return;
+
+      try {
+        const link = buildProviderDeepLink(
+          exportLinkDialog.provider,
+          activeApp,
+          {
+            includeCredentials: !replaceWithPlaceholder,
+          },
+        );
+        await copyText(link);
+        toast.success(
+          replaceWithPlaceholder
+            ? t("provider.exportLinkCopiedWithoutKey")
+            : t("provider.exportLinkCopiedWithKey"),
+        );
+      } catch (error) {
+        toast.error(
+          extractErrorMessage(error) || t("provider.exportLinkFailed"),
+        );
+      } finally {
+        setExportLinkDialog(null);
+      }
+    },
+    [exportLinkDialog, activeApp, t],
+  );
+
   const confirmActionMessage = useMemo(() => {
     if (!confirmAction) return "";
 
@@ -1121,6 +1161,7 @@ function App() {
                       onDelete={(provider) =>
                         setConfirmAction({ provider, action: "delete" })
                       }
+                      onExportLink={handleExportProviderLink}
                       onRemoveFromConfig={
                         activeApp === "opencode" ||
                         activeApp === "openclaw" ||
@@ -1828,6 +1869,18 @@ function App() {
           })();
         }}
         onCancel={() => setLaunchDashboardOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(exportLinkDialog)}
+        title={t("provider.exportLinkConfirmTitle")}
+        message={t("provider.exportLinkConfirmMessage")}
+        checkboxLabel={t("provider.exportLinkIncludeKey")}
+        checkboxDefaultChecked={true}
+        confirmText={t("common.confirm")}
+        variant="info"
+        onConfirm={confirmExportLink}
+        onCancel={() => setExportLinkDialog(null)}
       />
 
       <DeepLinkImportDialog />

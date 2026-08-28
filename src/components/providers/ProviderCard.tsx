@@ -22,7 +22,12 @@ import SubscriptionQuotaFooter from "@/components/SubscriptionQuotaFooter";
 import CopilotQuotaFooter from "@/components/CopilotQuotaFooter";
 import CodexOauthQuotaFooter from "@/components/CodexOauthQuotaFooter";
 import XaiOauthQuotaFooter from "@/components/XaiOauthQuotaFooter";
-import { PROVIDER_TYPES, TEMPLATE_TYPES } from "@/config/constants";
+import {
+  PROVIDER_TYPES,
+  TEMPLATE_TYPES,
+  isOAuthProviderType,
+} from "@/config/constants";
+import { DEEPLINK_EXPORT_APP_IDS } from "@/utils/providerDeepLink";
 import { isHermesReadOnlyProvider } from "@/config/hermesProviderPresets";
 import { ProviderHealthBadge } from "@/components/providers/ProviderHealthBadge";
 import { FailoverPriorityBadge } from "@/components/providers/FailoverPriorityBadge";
@@ -58,6 +63,7 @@ interface ProviderCardProps {
   onSwitch: (provider: Provider) => void;
   onEdit: (provider: Provider) => void;
   onDelete: (provider: Provider) => void;
+  onExportLink?: (provider: Provider) => void;
   onRemoveFromConfig?: (provider: Provider) => void;
   onDisableOmo?: () => void;
   onDisableOmoSlim?: () => void;
@@ -175,6 +181,7 @@ export function ProviderCard({
   onSwitch,
   onEdit,
   onDelete,
+  onExportLink,
   onRemoveFromConfig,
   onDisableOmo,
   onDisableOmoSlim,
@@ -231,6 +238,15 @@ export function ProviderCard({
   const isAnyOmo = isOmo || isOmoSlim;
   const handleDisableAnyOmo = isOmoSlim ? onDisableOmoSlim : onDisableOmo;
   const isAdditiveMode = (appId === "opencode" && !isAnyOmo) || appId === "pi";
+
+  // 导出深链接的可见性:app 必须在后端导入白名单内;官方供应商无自定义
+  // 端点与密钥(导入端要求 api_key)、托管 OAuth 供应商的凭据由代理注入,
+  // 二者导出链接要么无法导入、要么把凭据泄进明文链接,均不提供导出。
+  const canExportDeepLink =
+    Boolean(onExportLink) &&
+    DEEPLINK_EXPORT_APP_IDS.includes(appId) &&
+    provider.category !== "official" &&
+    !isOAuthProviderType(provider.meta?.providerType);
 
   const { data: health } = useProviderHealth(
     provider.id,
@@ -712,6 +728,9 @@ export function ProviderCard({
                   : () => onConfigureUsage(provider)
               }
               onDelete={() => onDelete(provider)}
+              onExportLink={
+                canExportDeepLink ? () => onExportLink?.(provider) : undefined
+              }
               onRemoveFromConfig={
                 onRemoveFromConfig
                   ? () => onRemoveFromConfig(provider)

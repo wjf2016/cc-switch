@@ -82,7 +82,7 @@ export function ConfirmDialog({
               checked={checkboxChecked}
               disabled={pending}
               onCheckedChange={(value) => setCheckboxChecked(value === true)}
-              className="mt-0.5"
+              className="mt-0.5 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             <span className="text-sm leading-relaxed">{checkboxLabel}</span>
           </label>

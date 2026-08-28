@@ -57,6 +57,7 @@ interface ProviderListProps {
   onSwitch: (provider: Provider) => void;
   onEdit: (provider: Provider) => void;
   onDelete: (provider: Provider) => void;
+  onExportLink?: (provider: Provider) => void;
   onRemoveFromConfig?: (provider: Provider) => void;
   onDisableOmo?: () => void;
   onDisableOmoSlim?: () => void;
@@ -79,6 +80,7 @@ export function ProviderList({
   onSwitch,
   onEdit,
   onDelete,
+  onExportLink,
   onRemoveFromConfig,
   onDisableOmo,
   onDisableOmoSlim,
@@ -469,6 +471,7 @@ export function ProviderList({
                 onSwitch={onSwitch}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onExportLink={onExportLink}
                 onRemoveFromConfig={onRemoveFromConfig}
                 onDisableOmo={onDisableOmo}
                 onDisableOmoSlim={onDisableOmoSlim}
@@ -626,6 +629,7 @@ interface SortableProviderCardProps {
   onSwitch: (provider: Provider) => void;
   onEdit: (provider: Provider) => void;
   onDelete: (provider: Provider) => void;
+  onExportLink?: (provider: Provider) => void;
   onRemoveFromConfig?: (provider: Provider) => void;
   onDisableOmo?: () => void;
   onDisableOmoSlim?: () => void;
@@ -659,6 +663,7 @@ function SortableProviderCard({
   onSwitch,
   onEdit,
   onDelete,
+  onExportLink,
   onRemoveFromConfig,
   onDisableOmo,
   onDisableOmoSlim,
@@ -706,6 +711,7 @@ function SortableProviderCard({
         onSwitch={onSwitch}
         onEdit={onEdit}
         onDelete={onDelete}
+        onExportLink={onExportLink}
         onRemoveFromConfig={onRemoveFromConfig}
         onDisableOmo={onDisableOmo}
         onDisableOmoSlim={onDisableOmoSlim}
