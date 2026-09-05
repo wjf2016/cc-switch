@@ -66,6 +66,7 @@ interface ProviderListProps {
   onOpenWebsite: (url: string) => void;
   onOpenTerminal?: (provider: Provider) => void;
   onCreate?: () => void;
+  onMigrateFromClaude?: () => void;
   isLoading?: boolean;
   isProxyRunning?: boolean; // 代理服务运行状态
   isProxyTakeover?: boolean; // 代理接管模式（Live配置已被接管）
@@ -89,6 +90,7 @@ export function ProviderList({
   onOpenWebsite,
   onOpenTerminal,
   onCreate,
+  onMigrateFromClaude,
   isLoading = false,
   isProxyRunning = false,
   isProxyTakeover = false,
@@ -421,6 +423,7 @@ export function ProviderList({
           appId={appId}
           onCreate={appId === "pi" ? undefined : onCreate}
           onImport={appId === "pi" ? undefined : () => importMutation.mutate()}
+          onMigrateFromClaude={onMigrateFromClaude}
         />
       </div>
     );

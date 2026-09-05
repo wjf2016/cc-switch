@@ -7,12 +7,14 @@ interface ProviderEmptyStateProps {
   appId: AppId;
   onCreate?: () => void;
   onImport?: () => void;
+  onMigrateFromClaude?: () => void;
 }
 
 export function ProviderEmptyState({
   appId,
   onCreate,
   onImport,
+  onMigrateFromClaude,
 }: ProviderEmptyStateProps) {
   const { t } = useTranslation();
   const isPi = appId === "pi";
@@ -46,6 +48,17 @@ export function ProviderEmptyState({
                   defaultValue: "将 Claude Code 中已有的供应商导入",
                 })
               : t("provider.importCurrent")}
+          </Button>
+        )}
+        {onMigrateFromClaude && (
+          <Button
+            variant={onImport ? "outline" : "default"}
+            onClick={onMigrateFromClaude}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t("provider.migrateFromClaude", {
+              defaultValue: "从 Claude Code 批量导入",
+            })}
           </Button>
         )}
         {onCreate && (

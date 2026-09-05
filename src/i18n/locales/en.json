@@ -108,6 +108,43 @@
     "noProvidersDescriptionSnippet": "Settings other than API key and endpoint (e.g. plugins) will be saved to a common config snippet for sharing across providers",
     "importCurrent": "Import Current Config",
     "importFromClaude": "Import existing providers from Claude Code",
+    "migrateFromClaude": "Bulk import from Claude Code",
+    "providerMigration": {
+      "titlePi": "Migrate from Claude Code to Pi",
+      "titleCodex": "Migrate from Claude Code to Codex",
+      "securityHint": "The API key is read and inserted locally by the backend.",
+      "selectHint": "Select Claude Code providers. Edit and save one at a time; the next provider loads automatically.",
+      "searchPlaceholder": "Search providers or addresses",
+      "loadingSources": "Loading providers...",
+      "noSources": "No matching providers",
+      "ineligible": "Unavailable for migration: {{reason}}",
+      "selectedCount": "{{count}} migratable provider(s) selected",
+      "editingProgress": "Editing provider {{current}} of {{total}}",
+      "sourceAddress": "Source address: {{address}}",
+      "saveHint": "Saved and imported immediately",
+      "progress": "{{current}} / {{total}}",
+      "resultSummary": "Processing completed. Review each result.",
+      "separator": "; ",
+      "actions": {
+        "startImport": "Start Import",
+        "saveAndImport": "Save and Import",
+        "backToList": "Back to List",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All"
+      },
+      "errors": {
+        "loadSources": "Unable to load Claude providers",
+        "noItem": "No editable migration item",
+        "loadItem": "Unable to load migration item",
+        "noResult": "Migration returned no result",
+        "retry": "This provider was not imported. Correct the fields and try again."
+      },
+      "status": {
+        "succeeded": "Imported successfully",
+        "blocked": "Not imported: blocked",
+        "failed": "Import failed"
+      }
+    },
     "importCurrentDescription": "Import current live config as default provider",
     "currentlyUsing": "Currently Using",
     "enable": "Enable",

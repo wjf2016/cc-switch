@@ -5,6 +5,7 @@
 mod endpoints;
 mod gemini_auth;
 mod live;
+pub(crate) mod migration;
 mod pi;
 mod usage;
 
@@ -41,6 +42,10 @@ pub(crate) use live::{
     provider_exists_in_live_config, strip_common_config_from_live_settings,
     sync_current_provider_for_app_to_live, write_live_with_common_config_for_codex_oauth_manager,
     write_live_with_common_config_for_state, LiveSyncOutcome,
+};
+pub(crate) use migration::{
+    ClaudeProviderMigrationPreview, ClaudeProviderMigrationRequest, ClaudeProviderMigrationSource,
+    ClaudeProviderMigrationSubmitResult,
 };
 
 // Internal re-exports

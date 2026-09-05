@@ -1,6 +1,15 @@
 export type { AppId } from "./types";
 export { piApi } from "./pi";
 export { providersApi, universalProvidersApi } from "./providers";
+export { providerMigrationApi } from "./providerMigration";
+export type {
+  ProviderMigrationEdit,
+  ProviderMigrationPreviewItem,
+  ProviderMigrationRequest,
+  ProviderMigrationPreviewResponse,
+  ProviderMigrationSubmitResponse,
+  ProviderMigrationTargetApp,
+} from "./providerMigration";
 export { settingsApi } from "./settings";
 export { backupsApi } from "./settings";
 export { mcpApi } from "./mcp";

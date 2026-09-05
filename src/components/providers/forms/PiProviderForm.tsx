@@ -391,6 +391,7 @@ export function PiProviderForm({
   onSubmitReadyChange,
   initialData,
   showButtons = true,
+  allowProviderKeyEdit = false,
 }: ProviderFormProps) {
   const { t } = useTranslation();
   const isDarkMode = useDarkMode();
@@ -469,6 +470,7 @@ export function PiProviderForm({
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const modelFetchGenerationRef = useRef(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [modelNameError, setModelNameError] = useState<string | null>(null);
   const initialModels = useMemo<PiModelDraft[]>(() => {
     const configured = Array.isArray(initialConfig.models)
       ? initialConfig.models
@@ -1063,6 +1065,7 @@ export function PiProviderForm({
   const submit = async (identity: ProviderFormData) => {
     onSubmittingChange?.(true);
     setFormError(null);
+    setModelNameError(null);
     try {
       if (!isEdit && selectedPresetId === null) {
         throw new PiFormValidationError(t("pi.form.selectPresetRequired"));
@@ -1126,8 +1129,8 @@ export function PiProviderForm({
         const includeName = !isEdit || model.hasName;
         const includeReasoning = !isEdit || model.hasReasoning;
         const includeInput = !isEdit || model.hasInput;
-        const includeContextWindow = !isEdit || model.hasContextWindow;
-        const includeMaxTokens = !isEdit || model.hasMaxTokens;
+        const includeContextWindow = true;
+        const includeMaxTokens = true;
         if (includeName && !displayName) {
           throw new PiFormValidationError(
             t("pi.form.modelNameRequired", { index: index + 1 }),
@@ -1245,7 +1248,7 @@ export function PiProviderForm({
         settingsConfig: JSON.stringify(settingsConfig),
         icon: identity.icon || selectedPreset?.icon || "pi",
         iconColor: identity.iconColor || selectedPreset?.iconColor || "",
-        providerKey: isEdit ? providerId : trimmedKey,
+        providerKey: isEdit && !allowProviderKeyEdit ? providerId : trimmedKey,
         presetId: selectedPresetId ?? undefined,
         presetCategory: category,
         meta: initialData?.meta,
@@ -1258,6 +1261,12 @@ export function PiProviderForm({
           ? rawMessage
           : translatePiProviderMutationError(rawMessage, t) || rawMessage;
       setFormError(message);
+      setModelNameError(
+        error instanceof PiFormValidationError &&
+          error.fieldSelector?.startsWith("#pi-model-name-")
+          ? message
+          : null,
+      );
       if (error instanceof PiFormValidationError) {
         const modelDetailsMatch = error.fieldSelector?.match(
           /^#pi-model-(?:context-window|max-tokens|thinking-levels)-(.+)$/,
@@ -1367,7 +1376,7 @@ export function PiProviderForm({
                       onChange={(event) =>
                         handleProviderKeyChange(event.target.value)
                       }
-                      disabled={isEdit}
+                      disabled={isEdit && !allowProviderKeyEdit}
                       placeholder="my-provider"
                       autoComplete="off"
                     />
@@ -1582,20 +1591,29 @@ export function PiProviderForm({
                               />
                             )}
                           </div>
-                          <Input
-                            id={`pi-model-name-${model.key}`}
-                            value={model.name}
-                            onChange={(event) =>
-                              updateModelOverride(model.key, {
-                                name: event.target.value,
-                                hasName: true,
-                              })
-                            }
-                            placeholder={t("pi.form.modelNamePlaceholder")}
-                            aria-label={t("pi.form.modelName")}
-                            required={!isEdit || model.hasName}
-                            className="min-w-0 flex-1"
-                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <Input
+                              id={`pi-model-name-${model.key}`}
+                              value={model.name}
+                              onChange={(event) => {
+                                setModelNameError(null);
+                                updateModelOverride(model.key, {
+                                  name: event.target.value,
+                                  hasName: true,
+                                });
+                              }}
+                              placeholder={t("pi.form.modelNamePlaceholder")}
+                              aria-label={t("pi.form.modelName")}
+                              aria-invalid={Boolean(modelNameError)}
+                              required
+                              className="min-w-0 w-full"
+                            />
+                            {modelNameError && (
+                              <p className="text-xs text-destructive">
+                                {modelNameError}
+                              </p>
+                            )}
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -1672,7 +1690,7 @@ export function PiProviderForm({
                                 step="any"
                                 min="1"
                                 inputMode="decimal"
-                                required={!isEdit || model.hasContextWindow}
+                                required
                                 value={model.contextWindow}
                                 onChange={(event) =>
                                   updateModelOverride(model.key, {
@@ -1704,7 +1722,7 @@ export function PiProviderForm({
                                 step="any"
                                 min="1"
                                 inputMode="decimal"
-                                required={!isEdit || model.hasMaxTokens}
+                                required
                                 value={model.maxTokens}
                                 onChange={(event) =>
                                   updateModelOverride(model.key, {

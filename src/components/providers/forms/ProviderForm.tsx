@@ -273,6 +273,8 @@ export interface ProviderFormProps {
   };
   showButtons?: boolean;
   isProxyTakeover?: boolean;
+  /** Allows migration forms to change the target provider key before creation. */
+  allowProviderKeyEdit?: boolean;
 }
 
 export function ProviderForm(props: ProviderFormProps) {

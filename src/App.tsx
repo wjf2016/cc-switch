@@ -67,6 +67,7 @@ import {
 import { AppSwitcher } from "@/components/AppSwitcher";
 import { ProfileSwitcher } from "@/components/profiles/ProfileSwitcher";
 import { ProviderList } from "@/components/providers/ProviderList";
+import { ProviderMigrationDialog } from "@/components/providers/ProviderMigrationDialog";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
 import { EditProviderDialog } from "@/components/providers/EditProviderDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -187,6 +188,9 @@ function App() {
     useState<SkillsPageSource>("repos");
   const [settingsDefaultTab, setSettingsDefaultTab] = useState("general");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [migrationTargetApp, setMigrationTargetApp] = useState<
+    "pi" | "codex" | null
+  >(null);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [mcpManagementBusy, setMcpManagementBusy] = useState(false);
   const [skillsManagementBusy, setSkillsManagementBusy] = useState(false);
@@ -1186,6 +1190,11 @@ function App() {
                         activeApp === "claude" ? handleOpenTerminal : undefined
                       }
                       onCreate={() => setIsAddOpen(true)}
+                      onMigrateFromClaude={
+                        activeApp === "pi" || activeApp === "codex"
+                          ? () => setMigrationTargetApp(activeApp)
+                          : undefined
+                      }
                       onSetAsDefault={
                         activeApp === "openclaw"
                           ? setAsDefaultModel
@@ -1777,6 +1786,18 @@ function App() {
                     >
                       <Plus className="w-5 h-5" />
                     </Button>
+                    {(activeApp === "pi" || activeApp === "codex") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMigrationTargetApp(activeApp)}
+                        className="ml-2"
+                      >
+                        {t("provider.migrateFromClaude", {
+                          defaultValue: "从 Claude Code 批量导入",
+                        })}
+                      </Button>
+                    )}
                   </>
                 )}
               </div>
@@ -1791,6 +1812,23 @@ function App() {
         )}
         {renderContent()}
       </main>
+
+      <ProviderMigrationDialog
+        open={migrationTargetApp !== null}
+        targetApp={migrationTargetApp || "pi"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMigrationTargetApp(null);
+          }
+        }}
+        onCompleted={async () => {
+          await queryClient.invalidateQueries({ queryKey: ["providers", activeApp] });
+          if (migrationTargetApp === "pi") {
+            await invalidatePiProviderCaches(queryClient);
+          }
+          await refetch();
+        }}
+      />
 
       <AddProviderDialog
         open={isAddOpen}
