@@ -1678,6 +1678,7 @@ pub fn run() {
             commands::get_request_logs,
             commands::get_request_detail,
             commands::get_model_pricing,
+            commands::get_model_info,
             commands::update_model_pricing,
             commands::update_model_pricing_batch,
             commands::delete_model_pricing,

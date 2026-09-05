@@ -1,5 +1,6 @@
 export type { AppId } from "./types";
 export { piApi } from "./pi";
+export type { ModelInfo } from "./pi";
 export { providersApi, universalProvidersApi } from "./providers";
 export { providerMigrationApi } from "./providerMigration";
 export type {

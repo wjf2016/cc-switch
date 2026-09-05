@@ -1,6 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { UsageScript } from "@/types";
 
+export interface ModelInfo {
+  modelId: string;
+  name: string;
+  context: number;
+  output: number;
+}
+
 export interface PiCurrentState {
   enabledProviderIds: string[];
   defaultProviderId: string | null;
@@ -32,6 +39,10 @@ export const piApi = {
       id,
       usageScript,
     });
+  },
+
+  async getModelInfo(modelId: string): Promise<ModelInfo[]> {
+    return await invoke("get_model_info", { modelId });
   },
 
   async getSessionDiscovery(): Promise<PiSessionDiscovery> {

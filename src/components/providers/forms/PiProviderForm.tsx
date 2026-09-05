@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Info,
   Loader2,
   Plus,
   Trash2,
@@ -21,6 +22,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverAnchor,
@@ -66,6 +75,7 @@ import { useDarkMode } from "@/hooks/useDarkMode";
 import { providerSchema, type ProviderFormData } from "@/lib/schemas/provider";
 import type { ProviderCategory } from "@/types";
 import { translatePiProviderMutationError } from "@/utils/errorUtils";
+import { piApi, type ModelInfo } from "@/lib/api/pi";
 
 const PI_API_FORMATS = [
   { value: "openai-completions", label: "OpenAI Chat Completions" },
@@ -470,6 +480,11 @@ export function PiProviderForm({
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const modelFetchGenerationRef = useRef(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [modelInfoDialogOpen, setModelInfoDialogOpen] = useState(false);
+  const [modelInfoCandidates, setModelInfoCandidates] = useState<ModelInfo[]>([]);
+  const [selectedModelInfoId, setSelectedModelInfoId] = useState<string | null>(null);
+  const [modelInfoTargetKey, setModelInfoTargetKey] = useState<string | null>(null);
+  const [isFetchingModelInfo, setIsFetchingModelInfo] = useState(false);
   const [modelNameError, setModelNameError] = useState<string | null>(null);
   const initialModels = useMemo<PiModelDraft[]>(() => {
     const configured = Array.isArray(initialConfig.models)
@@ -932,6 +947,48 @@ export function PiProviderForm({
       else next.add(key);
       return next;
     });
+  };
+
+  const handleGetModelInfo = useCallback(
+    async (model: PiModelDraft) => {
+      if (!model.id.trim()) {
+        toast.info(t("pi.form.modelIdRequired", "请先填写模型 ID"));
+        return;
+      }
+      setIsFetchingModelInfo(true);
+      try {
+        const candidates = await piApi.getModelInfo(model.id);
+        if (candidates.length === 0) {
+          toast.info(t("pi.form.modelInfoNotFound", "未找到该模型的信息"));
+          return;
+        }
+        setModelInfoCandidates(candidates);
+        setSelectedModelInfoId(candidates.length === 1 ? candidates[0].modelId : null);
+        setModelInfoTargetKey(model.key);
+        setModelInfoDialogOpen(true);
+      } catch (error) {
+        toast.error(`${t("pi.form.modelInfoLoadFailed", "获取模型信息失败")}: ${String(error)}`);
+      } finally {
+        setIsFetchingModelInfo(false);
+      }
+    },
+    [t],
+  );
+
+  const applySelectedModelInfo = () => {
+    const selected = modelInfoCandidates.find(
+      (candidate) => candidate.modelId === selectedModelInfoId,
+    );
+    if (!selected || !modelInfoTargetKey) return;
+    updateModelOverride(modelInfoTargetKey, {
+      name: selected.name,
+      hasName: true,
+      contextWindow: String(selected.context),
+      hasContextWindow: true,
+      maxTokens: String(selected.output),
+      hasMaxTokens: true,
+    });
+    setModelInfoDialogOpen(false);
   };
 
   const handleFetchModels = useCallback(() => {
@@ -1668,6 +1725,22 @@ export function PiProviderForm({
                                   }
                                 />
                               </div>
+                              <div className="flex items-center gap-2 sm:col-span-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleGetModelInfo(model)}
+                                  disabled={isFetchingModelInfo}
+                                >
+                                  {isFetchingModelInfo ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Info className="mr-1.5 h-4 w-4" />
+                                  )}
+                                  {t("pi.form.getModelInfo", "获取模型信息")}
+                                </Button>
+                              </div>
                             </div>
                             <Field
                               label={
@@ -2022,6 +2095,47 @@ export function PiProviderForm({
             )}
           />
         )}
+
+        <Dialog
+          open={modelInfoDialogOpen}
+          onOpenChange={(open) => {
+            if (!open && !isFetchingModelInfo) setModelInfoDialogOpen(false);
+          }}
+        >
+          <DialogContent className="max-w-lg" zIndex="top">
+            <DialogHeader>
+              <DialogTitle>{t("pi.form.modelInfoTitle", "确认模型信息")}</DialogTitle>
+              <DialogDescription>
+                {t("pi.form.modelInfoDescription", "请选择并确认要填入的模型信息")}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              {modelInfoCandidates.map((candidate) => (
+                <button
+                  key={candidate.modelId}
+                  type="button"
+                  className={`w-full rounded-md border p-3 text-left ${selectedModelInfoId === candidate.modelId ? "border-primary bg-primary/5" : "border-border"}`}
+                  onClick={() => setSelectedModelInfoId(candidate.modelId)}
+                >
+                  <div className="font-medium">{candidate.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{candidate.modelId}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <span>{t("pi.form.contextWindow")}: {candidate.context}</span>
+                    <span>{t("pi.form.maxTokens")}: {candidate.output}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setModelInfoDialogOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="button" disabled={!selectedModelInfoId} onClick={applySelectedModelInfo}>
+                {t("common.confirm")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {showButtons && (
           <div className="flex justify-end gap-2">

@@ -58,7 +58,12 @@ export function ProviderMigrationDialog({
   onOpenChange,
   onCompleted,
 }: ProviderMigrationDialogProps) {
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
+  const t = (key: string, options?: Record<string, unknown>) =>
+    translate(
+      key.startsWith("providerMigration.") ? `provider.${key}` : key,
+      options,
+    );
   const [step, setStep] = useState<Step>("select");
   const [sources, setSources] = useState<ClaudeProviderMigrationSource[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
