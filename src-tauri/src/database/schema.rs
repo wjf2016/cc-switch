@@ -568,6 +568,16 @@ impl Database {
                         Self::migrate_v17_to_v18(conn)?;
                         Self::set_user_version(conn, 18)?;
                     }
+                    18 => {
+                        log::info!("迁移数据库从 v18 到 v19（补齐请求日志计价模型列）");
+                        Self::migrate_v18_to_v19(conn)?;
+                        Self::set_user_version(conn, 19)?;
+                    }
+                    19 => {
+                        log::info!("迁移数据库从 v19 到 v20（补齐使用量汇总模型维度）");
+                        Self::migrate_v19_to_v20(conn)?;
+                        Self::set_user_version(conn, 20)?;
+                    }
                     _ => {
                         return Err(AppError::Database(format!(
                             "未知的数据库版本 {version}，无法迁移到 {SCHEMA_VERSION}"
@@ -1631,6 +1641,88 @@ impl Database {
                 "INTEGER",
             )?;
         }
+        Ok(())
+    }
+
+    /// v18 -> v19: 补偿开发版已标记版本、但未包含 pricing_model 的请求日志表。
+    fn migrate_v18_to_v19(conn: &Connection) -> Result<(), AppError> {
+        if Self::table_exists(conn, "proxy_request_logs")? {
+            Self::add_column_if_missing(conn, "proxy_request_logs", "pricing_model", "TEXT")?;
+        }
+        Ok(())
+    }
+
+    /// v19 -> v20: 补偿开发版已标记版本、但未包含计价模型维度的使用量表。
+    ///
+    /// pricing_model 和 rollup 的 request_model 最初随 v10 -> v11 引入；部分开发
+    /// 数据库在字段合入前就已升到 v11，之后不会重跑旧迁移。明细表可直接补列，
+    /// 汇总表的主键需要包含这两个维度，故仅在缺列时重建并保留历史聚合数据。
+    fn migrate_v19_to_v20(conn: &Connection) -> Result<(), AppError> {
+        if Self::table_exists(conn, "proxy_request_logs")? {
+            Self::add_column_if_missing(conn, "proxy_request_logs", "pricing_model", "TEXT")?;
+        }
+
+        if !Self::table_exists(conn, "usage_daily_rollups")? {
+            return Ok(());
+        }
+
+        let has_request_model = Self::has_column(conn, "usage_daily_rollups", "request_model")?;
+        let has_pricing_model = Self::has_column(conn, "usage_daily_rollups", "pricing_model")?;
+        if has_request_model && has_pricing_model {
+            return Ok(());
+        }
+
+        let request_model = if has_request_model {
+            "request_model"
+        } else {
+            "''"
+        };
+        let pricing_model = if has_pricing_model {
+            "pricing_model"
+        } else {
+            "''"
+        };
+        let input_token_semantics =
+            if Self::has_column(conn, "usage_daily_rollups", "input_token_semantics")? {
+                "input_token_semantics"
+            } else {
+                "0"
+            };
+        let sql = format!(
+            "ALTER TABLE usage_daily_rollups RENAME TO usage_daily_rollups_v18;
+             CREATE TABLE usage_daily_rollups (
+                 date TEXT NOT NULL,
+                 app_type TEXT NOT NULL,
+                 provider_id TEXT NOT NULL,
+                 model TEXT NOT NULL,
+                 request_model TEXT NOT NULL DEFAULT '',
+                 pricing_model TEXT NOT NULL DEFAULT '',
+                 request_count INTEGER NOT NULL DEFAULT 0,
+                 success_count INTEGER NOT NULL DEFAULT 0,
+                 input_tokens INTEGER NOT NULL DEFAULT 0,
+                 output_tokens INTEGER NOT NULL DEFAULT 0,
+                 cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                 cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                 input_token_semantics INTEGER NOT NULL DEFAULT 0,
+                 total_cost_usd TEXT NOT NULL DEFAULT '0',
+                 avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+                 PRIMARY KEY (date, app_type, provider_id, model, request_model, pricing_model)
+             );
+             INSERT INTO usage_daily_rollups
+                 (date, app_type, provider_id, model, request_model, pricing_model,
+                  request_count, success_count, input_tokens, output_tokens,
+                  cache_read_tokens, cache_creation_tokens, input_token_semantics,
+                  total_cost_usd, avg_latency_ms)
+             SELECT date, app_type, provider_id, model, {request_model}, {pricing_model},
+                    request_count, success_count, input_tokens, output_tokens,
+                    cache_read_tokens, cache_creation_tokens, {input_token_semantics},
+                    total_cost_usd, avg_latency_ms
+             FROM usage_daily_rollups_v18;
+             DROP TABLE usage_daily_rollups_v18;"
+        );
+        conn.execute_batch(&sql).map_err(|error| {
+            AppError::Database(format!("v19 -> v20 重建 usage_daily_rollups 失败: {error}"))
+        })?;
         Ok(())
     }
 
@@ -3476,6 +3568,89 @@ mod tests {
              VALUES ('pi_session', 'request', 'semantic', 1)",
             [],
         )?;
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_v18_to_v20_repairs_development_database() -> Result<(), AppError> {
+        // 两张表模拟在字段合入前已执行过 v11 迁移、之后再升到 v18 的开发库。
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(
+            "CREATE TABLE proxy_request_logs (
+                request_id TEXT PRIMARY KEY,
+                model TEXT NOT NULL
+             );
+             INSERT INTO proxy_request_logs (request_id, model) VALUES ('existing', 'gpt-5');
+             CREATE TABLE usage_daily_rollups (
+                date TEXT NOT NULL,
+                app_type TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+                input_token_semantics INTEGER NOT NULL DEFAULT 0,
+                total_cost_usd TEXT NOT NULL DEFAULT '0',
+                avg_latency_ms INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (date, app_type, provider_id, model)
+             );
+             INSERT INTO usage_daily_rollups
+                (date, app_type, provider_id, model, request_count, input_tokens,
+                 input_token_semantics, total_cost_usd)
+             VALUES ('2026-09-07', 'pi', '_pi_session', 'gpt-5', 3, 42, 2, '0.001');",
+        )?;
+        Database::set_user_version(&conn, 18)?;
+
+        Database::apply_schema_migrations_on_conn(&conn)?;
+
+        assert_eq!(Database::get_user_version(&conn)?, SCHEMA_VERSION);
+        assert!(Database::has_column(
+            &conn,
+            "proxy_request_logs",
+            "pricing_model"
+        )?);
+        assert!(Database::has_column(
+            &conn,
+            "usage_daily_rollups",
+            "request_model"
+        )?);
+        assert!(Database::has_column(
+            &conn,
+            "usage_daily_rollups",
+            "pricing_model"
+        )?);
+        let (model, request_model, pricing_model, input, semantics, cost): (
+            String,
+            String,
+            String,
+            i64,
+            i64,
+            String,
+        ) = conn.query_row(
+            "SELECT model, request_model, pricing_model, input_tokens,
+                    input_token_semantics, total_cost_usd
+             FROM usage_daily_rollups",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )?;
+        assert_eq!(model, "gpt-5");
+        assert_eq!(request_model, "");
+        assert_eq!(pricing_model, "");
+        assert_eq!(input, 42);
+        assert_eq!(semantics, 2);
+        assert_eq!(cost, "0.001");
         Ok(())
     }
 
