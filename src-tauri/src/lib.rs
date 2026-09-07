@@ -1181,6 +1181,25 @@ pub fn run() {
             let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)
                 .tooltip("CC Switch") // 鼠标悬停提示
                 .on_tray_icon_event(|tray, event| match event {
+                    // Windows 双击托盘图标时切换主窗口的显示状态。
+                    TrayIconEvent::DoubleClick { .. } => {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            let is_minimized = window.is_minimized().unwrap_or(false);
+                            if is_visible && !is_minimized {
+                                let _ = window.hide();
+                                #[cfg(target_os = "windows")]
+                                {
+                                    let _ = window.set_skip_taskbar(true);
+                                }
+                            } else {
+                                tray::handle_tray_menu_event(app, "show_main");
+                            }
+                        } else {
+                            tray::handle_tray_menu_event(app, "show_main");
+                        }
+                    }
                     // 鼠标悬停/点击到托盘图标时，后台异步刷新用量缓存，
                     // 让用户下一次（或快速打开菜单的那一刻）看到较新的数字。
                     // refresh_all_usage_in_tray 内部有 10 秒防抖。
