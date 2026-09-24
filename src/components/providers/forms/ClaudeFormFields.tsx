@@ -58,6 +58,7 @@ import {
   hasClaudeOneMMarker,
   setClaudeOneMMarker,
   stripClaudeOneMMarker,
+  type ClaudeModelEdit,
   type ClaudeModelEnvField,
 } from "./hooks/useModelState";
 import {
@@ -136,6 +137,7 @@ interface ClaudeFormFieldsProps {
   defaultFableModelName: string;
   subagentModel: string;
   onModelChange: (field: ClaudeModelEnvField, value: string) => void;
+  lastModelEdit?: ClaudeModelEdit | null;
 
   // Speed Test Endpoints
   speedTestEndpoints: EndpointCandidate[];
@@ -212,6 +214,7 @@ export function ClaudeFormFields({
   defaultFableModelName,
   subagentModel,
   onModelChange,
+  lastModelEdit,
   speedTestEndpoints,
   apiFormat,
   onApiFormatChange,
@@ -895,8 +898,14 @@ export function ClaudeFormFields({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      // 按面板从上到下取值，默认兜底模型最后使用。
+                      // 优先使用用户最近编辑的模型值（无论填在映射行还是兜底模型），
+                      // 避免映射行已有值时新填的兜底模型无法应用；
+                      // 无编辑记录时按面板从上到下取值，默认兜底模型最后使用。
+                      const lastEdit = lastModelEdit;
                       const value =
+                        (lastEdit && lastEdit.value.trim()
+                          ? lastEdit.value
+                          : "") ||
                         defaultSonnetModel ||
                         defaultOpusModel ||
                         defaultFableModel ||
@@ -916,6 +925,8 @@ export function ClaudeFormFields({
                             );
                           }
                         }
+                        // 默认兜底模型也统一为同一值，保证所有实际请求模型一致
+                        onModelChange("ANTHROPIC_MODEL", value);
                         toast.success(
                           t("providerForm.quickSetSuccess", {
                             defaultValue: "已将模型名称应用到所有角色",

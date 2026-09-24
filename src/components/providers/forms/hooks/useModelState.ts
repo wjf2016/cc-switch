@@ -17,6 +17,12 @@ export type ClaudeModelEnvField =
   | "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"
   | "CLAUDE_CODE_SUBAGENT_MODEL";
 
+/** 用户最近编辑的模型值字段（不含 *_NAME 显示名字段） */
+export type ClaudeModelEdit = {
+  field: ClaudeModelEnvField;
+  value: string;
+};
+
 export const CLAUDE_ONE_M_MARKER = "[1M]";
 
 export function hasClaudeOneMMarker(model: string): boolean {
@@ -142,6 +148,9 @@ export function useModelState({
     initial.fableName,
   );
   const [subagentModel, setSubagentModel] = useState(initial.subagent);
+  const [lastModelEdit, setLastModelEdit] = useState<ClaudeModelEdit | null>(
+    null,
+  );
 
   const isUserEditingRef = useRef(false);
   const lastConfigRef = useRef(settingsConfig);
@@ -173,11 +182,18 @@ export function useModelState({
     setDefaultFableModel(parsed.fable);
     setDefaultFableModelName(parsed.fableName);
     setSubagentModel(parsed.subagent);
+    // 表单加载/切换预设导致的外部变化：清除最近编辑记录，避免陈旧值残留
+    setLastModelEdit(null);
   }, [settingsConfig]);
 
   const handleModelChange = useCallback(
     (field: ClaudeModelEnvField, value: string) => {
       isUserEditingRef.current = true;
+
+      // 记录最近编辑的模型值字段（排除 *_NAME 显示名字段），供「一键设置」取值
+      if (!field.endsWith("_NAME")) {
+        setLastModelEdit({ field, value });
+      }
 
       if (field === "ANTHROPIC_MODEL") setClaudeModel(value);
       if (field === "ANTHROPIC_DEFAULT_HAIKU_MODEL")
@@ -245,6 +261,7 @@ export function useModelState({
     setDefaultFableModelName,
     subagentModel,
     setSubagentModel,
+    lastModelEdit,
     handleModelChange,
   };
 }

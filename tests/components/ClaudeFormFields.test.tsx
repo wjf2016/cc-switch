@@ -195,4 +195,36 @@ describe("ClaudeFormFields", () => {
       "shared-model[1M]",
     );
   });
+
+  it("一键设置优先使用最近编辑的模型值（映射行已有值时兜底模型仍可应用）", () => {
+    const onModelChange = vi.fn();
+    renderCopilotForm({
+      defaultSonnetModel: "old-model-high",
+      defaultSonnetModelName: "old-model-high",
+      claudeModel: "new-model",
+      lastModelEdit: { field: "ANTHROPIC_MODEL", value: "new-model" },
+      onModelChange,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "一键设置",
+      }),
+    );
+
+    expect(onModelChange).toHaveBeenCalledWith(
+      "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "new-model",
+    );
+    expect(onModelChange).toHaveBeenCalledWith(
+      "CLAUDE_CODE_SUBAGENT_MODEL",
+      "new-model",
+    );
+    // 兜底模型也统一为同一值
+    expect(onModelChange).toHaveBeenCalledWith("ANTHROPIC_MODEL", "new-model");
+    expect(onModelChange).not.toHaveBeenCalledWith(
+      "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "old-model-high",
+    );
+  });
 });
