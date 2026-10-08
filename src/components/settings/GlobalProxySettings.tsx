@@ -198,7 +198,7 @@ export function GlobalProxySettings() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-4">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 className="h-5 w-5 animate-spin text-fg-2" />
       </div>
     );
   }
@@ -206,7 +206,7 @@ export function GlobalProxySettings() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-fg-2">
           {t("settings.globalProxy.hint")}
         </p>
         <div className="flex gap-2">
