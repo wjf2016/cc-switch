@@ -143,18 +143,21 @@ impl StreamCheckService {
             None => Self::resolve_base_url(app_type, provider)?,
         };
 
-        let client = match crate::proxy::http_client::get_for_provider(
-            provider,
-            proxy_url.as_deref(),
-        ) {
-            Ok(client) => client,
-            Err(e) => {
-                log::warn!(
-                    "[StreamCheck] Failed to create client with proxy for provider={}: {e}. Falling back to global client.",
-                    provider.id
-                );
-                crate::proxy::http_client::get()
+        let client = if crate::proxy::http_client::is_loopback_url(&base_url) {
+            crate::proxy::http_client::get_for_url(&base_url)
+        } else if let Some(ref p_url) = proxy_url {
+            match crate::proxy::http_client::get_for_provider(provider, Some(p_url.as_str())) {
+                Ok(client) => client,
+                Err(e) => {
+                    log::warn!(
+                        "[StreamCheck] Failed to create client with proxy for provider={}: {e}. Falling back to default client.",
+                        provider.id
+                    );
+                    crate::proxy::http_client::get_for_url(&base_url)
+                }
             }
+        } else {
+            crate::proxy::http_client::get_for_url(&base_url)
         };
         let timeout = std::time::Duration::from_secs(config.timeout_secs);
         let ua = Self::custom_user_agent(provider);
