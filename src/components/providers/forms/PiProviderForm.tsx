@@ -51,7 +51,12 @@ import { BasicFormFields } from "./BasicFormFields";
 import { ProviderPresetSelector } from "./ProviderPresetSelector";
 import { RequestHeadersEditor } from "./RequestHeadersEditor";
 import { StructuredOptionsEditor } from "./StructuredOptionsEditor";
-import { ApiKeySection, EndpointField, ModelDropdown } from "./shared";
+import {
+  ApiKeySection,
+  EndpointField,
+  GptContextWindowHint,
+  ModelDropdown,
+} from "./shared";
 import {
   findRequestHeaderValue,
   normalizeRequestHeaders,
@@ -1895,6 +1900,10 @@ export function PiProviderForm({
                                   })
                                 }
                                 placeholder="128000"
+                              />
+                              <GptContextWindowHint
+                                modelId={model.id}
+                                contextWindow={model.contextWindow}
                               />
                             </Field>
                             <Field

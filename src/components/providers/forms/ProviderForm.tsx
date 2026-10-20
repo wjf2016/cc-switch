@@ -2064,6 +2064,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: baseUrl,
   });
 
   const {
@@ -2077,6 +2078,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: codexBaseUrl,
   });
 
   const {
@@ -2090,6 +2092,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: geminiBaseUrl,
   });
 
   const {
@@ -2103,6 +2106,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: opencodeForm.opencodeBaseUrl,
   });
 
   // 使用 API Key 链接 hook (OpenClaw)
@@ -2117,6 +2121,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: openclawForm.openclawBaseUrl,
   });
 
   // 使用 API Key 链接 hook (Hermes)
@@ -2131,6 +2136,7 @@ function ProviderFormFull({
     selectedPresetId,
     presetEntries,
     formWebsiteUrl: form.watch("websiteUrl") || "",
+    formBaseUrl: hermesForm.hermesBaseUrl,
   });
 
   // 使用端点测速候选 hook
@@ -2305,7 +2311,7 @@ function ProviderFormFull({
       const preset = entry.preset as HermesProviderPreset;
       const config = preset.settingsConfig;
 
-      hermesForm.resetHermesState(config);
+      hermesForm.resetHermesState(config, preset.providerKey);
 
       form.reset({
         name: preset.nameKey ? t(preset.nameKey) : preset.name,
