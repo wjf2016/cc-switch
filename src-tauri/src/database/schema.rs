@@ -68,8 +68,11 @@ impl Database {
             enabled_gemini BOOLEAN NOT NULL DEFAULT 0, enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0,
             enabled_opencode BOOLEAN NOT NULL DEFAULT 0,
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
+            enabled_agy BOOLEAN NOT NULL DEFAULT 0,
+            enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
-            enabled_pi BOOLEAN NOT NULL DEFAULT 0
+            enabled_pi BOOLEAN NOT NULL DEFAULT 0,
+            enabled_omp BOOLEAN NOT NULL DEFAULT 0
         )",
             [],
         )
@@ -99,6 +102,8 @@ impl Database {
             enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0,
             enabled_opencode BOOLEAN NOT NULL DEFAULT 0,
             enabled_mcode BOOLEAN NOT NULL DEFAULT 0,
+            enabled_agy BOOLEAN NOT NULL DEFAULT 0,
+            enabled_kimi BOOLEAN NOT NULL DEFAULT 0,
             enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
             installed_at INTEGER NOT NULL DEFAULT 0,
             content_hash TEXT,
@@ -393,15 +398,6 @@ impl Database {
             [],
         );
 
-        // 尝试为 mcp_servers 添加 enabled_pi 与 enabled_mcode 列，保障历史库无损兼容
-        let _ = conn.execute(
-            "ALTER TABLE mcp_servers ADD COLUMN enabled_pi BOOLEAN NOT NULL DEFAULT 0",
-            [],
-        );
-        let _ = conn.execute(
-            "ALTER TABLE mcp_servers ADD COLUMN enabled_mcode BOOLEAN NOT NULL DEFAULT 0",
-            [],
-        );
 
         // 尝试添加基础配置列到 proxy_config 表（兼容 v3.9.0-2 升级）
         let _ = conn.execute(
@@ -592,8 +588,6 @@ impl Database {
                                 )?;
                             }
                         }
-                        log::info!("迁移数据库从 v18 到 v19（补齐请求日志计价模型列）");
-                        Self::migrate_v18_to_v19(conn)?;
                         Self::set_user_version(conn, 19)?;
                     }
                     19 => {
@@ -609,22 +603,42 @@ impl Database {
                         Self::set_user_version(conn, 20)?;
                     }
                     20 => {
-                        log::info!("迁移数据库从 v20 到 v21（补齐使用量汇总模型维度与 mcode 支持）");
-                        Self::migrate_v19_to_v20(conn)?;
-                        Self::migrate_v20_to_v21(conn)?;
+                        for table in ["mcp_servers", "skills"] {
+                            if Self::table_exists(conn, table)? {
+                                Self::add_column_if_missing(
+                                    conn,
+                                    table,
+                                    "enabled_agy",
+                                    "BOOLEAN NOT NULL DEFAULT 0",
+                                )?;
+                            }
+                        }
                         Self::set_user_version(conn, 21)?;
                     }
                     21 => {
-                        log::info!("迁移数据库从 v21 到 v22（确保 MCP 支持 Pi）");
+                        for table in ["mcp_servers", "skills"] {
+                            if Self::table_exists(conn, table)? {
+                                Self::add_column_if_missing(
+                                    conn,
+                                    table,
+                                    "enabled_kimi",
+                                    "BOOLEAN NOT NULL DEFAULT 0",
+                                )?;
+                            }
+                        }
+                        Self::set_user_version(conn, 22)?;
+                    }
+                    22 => {
+                        // Oh My Pi：只有 MCP 存开关；Skills 的启用状态按原生目录现算（同 Pi）。
                         if Self::table_exists(conn, "mcp_servers")? {
                             Self::add_column_if_missing(
                                 conn,
                                 "mcp_servers",
-                                "enabled_pi",
+                                "enabled_omp",
                                 "BOOLEAN NOT NULL DEFAULT 0",
                             )?;
                         }
-                        Self::set_user_version(conn, 22)?;
+                        Self::set_user_version(conn, 23)?;
                     }
                     _ => {
                         return Err(AppError::Database(format!(
@@ -1692,102 +1706,8 @@ impl Database {
         Ok(())
     }
 
-    /// v18 -> v19: 补偿开发版已标记版本、但未包含 pricing_model 的请求日志表。
-    fn migrate_v18_to_v19(conn: &Connection) -> Result<(), AppError> {
-        if Self::table_exists(conn, "proxy_request_logs")? {
-            Self::add_column_if_missing(conn, "proxy_request_logs", "pricing_model", "TEXT")?;
-        }
-        Ok(())
-    }
 
-    /// v19 -> v20: 补偿开发版已标记版本、但未包含计价模型维度的使用量表。
-    ///
-    /// pricing_model 和 rollup 的 request_model 最初随 v10 -> v11 引入；部分开发
-    /// 数据库在字段合入前就已升到 v11，之后不会重跑旧迁移。明细表可直接补列，
-    /// 汇总表的主键需要包含这两个维度，故仅在缺列时重建并保留历史聚合数据。
-    fn migrate_v19_to_v20(conn: &Connection) -> Result<(), AppError> {
-        if Self::table_exists(conn, "proxy_request_logs")? {
-            Self::add_column_if_missing(conn, "proxy_request_logs", "pricing_model", "TEXT")?;
-        }
 
-        if !Self::table_exists(conn, "usage_daily_rollups")? {
-            return Ok(());
-        }
-
-        let has_request_model = Self::has_column(conn, "usage_daily_rollups", "request_model")?;
-        let has_pricing_model = Self::has_column(conn, "usage_daily_rollups", "pricing_model")?;
-        if has_request_model && has_pricing_model {
-            return Ok(());
-        }
-
-        let request_model = if has_request_model {
-            "request_model"
-        } else {
-            "''"
-        };
-        let pricing_model = if has_pricing_model {
-            "pricing_model"
-        } else {
-            "''"
-        };
-        let input_token_semantics =
-            if Self::has_column(conn, "usage_daily_rollups", "input_token_semantics")? {
-                "input_token_semantics"
-            } else {
-                "0"
-            };
-        let sql = format!(
-            "ALTER TABLE usage_daily_rollups RENAME TO usage_daily_rollups_v18;
-             CREATE TABLE usage_daily_rollups (
-                 date TEXT NOT NULL,
-                 app_type TEXT NOT NULL,
-                 provider_id TEXT NOT NULL,
-                 model TEXT NOT NULL,
-                 request_model TEXT NOT NULL DEFAULT '',
-                 pricing_model TEXT NOT NULL DEFAULT '',
-                 request_count INTEGER NOT NULL DEFAULT 0,
-                 success_count INTEGER NOT NULL DEFAULT 0,
-                 input_tokens INTEGER NOT NULL DEFAULT 0,
-                 output_tokens INTEGER NOT NULL DEFAULT 0,
-                 cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-                 cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-                 input_token_semantics INTEGER NOT NULL DEFAULT 0,
-                 total_cost_usd TEXT NOT NULL DEFAULT '0',
-                 avg_latency_ms INTEGER NOT NULL DEFAULT 0,
-                 PRIMARY KEY (date, app_type, provider_id, model, request_model, pricing_model)
-             );
-             INSERT INTO usage_daily_rollups
-                 (date, app_type, provider_id, model, request_model, pricing_model,
-                  request_count, success_count, input_tokens, output_tokens,
-                  cache_read_tokens, cache_creation_tokens, input_token_semantics,
-                  total_cost_usd, avg_latency_ms)
-             SELECT date, app_type, provider_id, model, {request_model}, {pricing_model},
-                    request_count, success_count, input_tokens, output_tokens,
-                    cache_read_tokens, cache_creation_tokens, {input_token_semantics},
-                    total_cost_usd, avg_latency_ms
-             FROM usage_daily_rollups_v18;
-             DROP TABLE usage_daily_rollups_v18;"
-        );
-        conn.execute_batch(&sql).map_err(|error| {
-            AppError::Database(format!("v19 -> v20 重建 usage_daily_rollups 失败: {error}"))
-        })?;
-        Ok(())
-    }
-
-    /// v20 -> v21: 为 MCP 和 Skills 添加 MiniMax Code 启用状态。
-    fn migrate_v20_to_v21(conn: &Connection) -> Result<(), AppError> {
-        for table in ["mcp_servers", "skills"] {
-            if Self::table_exists(conn, table)? {
-                Self::add_column_if_missing(
-                    conn,
-                    table,
-                    "enabled_mcode",
-                    "BOOLEAN NOT NULL DEFAULT 0",
-                )?;
-            }
-        }
-        Ok(())
-    }
 
     /// 插入默认模型定价数据
     /// 格式: (model_id, display_name, input, output, cache_read, cache_creation)
@@ -2540,6 +2460,17 @@ impl Database {
                 "0.006",
                 "0",
             ),
+            // 第三方上游（OpenCode Go、OpenRouter 的 deepseek/ 命名空间、Hermes 预设等）用带版本号的
+            // deepseek-v4.1-flash。点号版本既剥不成 deepseek-flash，前缀兜底也只命中更长的行，
+            // 不单列会显示「未定价」并按 0 计费
+            (
+                "deepseek-v4.1-flash",
+                "DeepSeek V4.1 Flash",
+                "0.3",
+                "1.2",
+                "0.006",
+                "0",
+            ),
             (
                 "deepseek-v4-flash",
                 "DeepSeek V4 Flash",
@@ -2623,6 +2554,34 @@ impl Database {
             ("kimi-k3", "Kimi K3", "3.00", "15.00", "0.30", "3.00"),
             // Kimi For Coding 套餐里 K3 的裸名（无 kimi- 前缀），同标准 list 价
             ("k3", "Kimi K3", "3.00", "15.00", "0.30", "3.00"),
+            // 2026-10-24 官方价页：K3.1 Pro 缓存写入取默认 5 分钟档（1 小时档为 2 倍）。
+            // HighSpeed 只有输入/输出/缓存写翻倍，缓存读仍是 $0.20，别按 K2.7 的 2 倍规律改
+            (
+                "kimi-k3.1-pro",
+                "Kimi K3.1 Pro",
+                "2.00",
+                "10.00",
+                "0.20",
+                "2.00",
+            ),
+            (
+                "kimi-k3.1-pro-highspeed",
+                "Kimi K3.1 Pro HighSpeed",
+                "4.00",
+                "20.00",
+                "0.20",
+                "4.00",
+            ),
+            // Kimi Code 套餐里的裸名（无 kimi- 前缀），同标准 list 价
+            ("k3.1-pro", "Kimi K3.1 Pro", "2.00", "10.00", "0.20", "2.00"),
+            (
+                "k3.1-pro-highspeed",
+                "Kimi K3.1 Pro HighSpeed",
+                "4.00",
+                "20.00",
+                "0.20",
+                "4.00",
+            ),
             // 腾讯混元 (Tencent Hunyuan)（官方 CNY 1/4/0.25 按 1 USD ≈ 7.14 折算；Hy3 阶梯计价取最低档）
             ("hunyuan-hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
             ("hy3", "Hunyuan Hy3", "0.14", "0.56", "0.035", "0"),
@@ -4043,6 +4002,87 @@ mod tests {
     }
 
     #[test]
+    fn kimi_migration_preserves_existing_flags_and_defaults_to_disabled() -> Result<(), AppError> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("CREATE TABLE mcp_servers(id TEXT PRIMARY KEY, enabled_codex BOOLEAN); CREATE TABLE skills(id TEXT PRIMARY KEY, enabled_claude BOOLEAN); INSERT INTO mcp_servers VALUES ('m',1); INSERT INTO skills VALUES ('s',1);")?;
+        Database::set_user_version(&conn, 21)?;
+        Database::apply_schema_migrations_on_conn(&conn)?;
+        assert_eq!(Database::get_user_version(&conn)?, SCHEMA_VERSION);
+        for (table, flag) in [
+            ("mcp_servers", "enabled_codex"),
+            ("skills", "enabled_claude"),
+        ] {
+            let flags = conn.query_row(
+                &format!("SELECT {flag}, enabled_kimi FROM {table}"),
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )?;
+            assert_eq!(flags, (1, 0));
+        }
+        Database::apply_schema_migrations_on_conn(&conn)?;
+        Ok(())
+    }
+
+    #[test]
+    fn kimi_clean_database_persists_mcp_and_skill_flags_independently() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let server = serde_json::from_value(serde_json::json!({"id":"m", "name":"m", "server":{"command":"echo"}, "apps":{"kimi":true,"codex":true}})).unwrap();
+        db.save_mcp_server(&server)?;
+        db.update_mcp_server_app_enabled("m", &crate::app_config::AppType::Kimi, false)?;
+        let saved = db.get_all_mcp_servers()?;
+        assert!(!saved["m"].apps.kimi);
+        assert!(saved["m"].apps.codex);
+        let skill = serde_json::from_value(serde_json::json!({"id":"s", "name":"s", "description":"", "directory":"s", "apps":{"kimi":true,"claude":true}, "installedAt":0})).unwrap();
+        db.save_skill(&skill)?;
+        let saved = db.get_installed_skill("s")?.unwrap();
+        assert!(saved.apps.kimi && saved.apps.claude);
+        assert!(db.get_all_installed_skills()?["s"].apps.kimi);
+        Ok(())
+    }
+
+    #[test]
+    fn agy_migration_preserves_existing_flags_and_defaults_to_disabled() -> Result<(), AppError> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("CREATE TABLE mcp_servers(id TEXT PRIMARY KEY, enabled_gemini BOOLEAN); CREATE TABLE skills(id TEXT PRIMARY KEY, enabled_codex BOOLEAN); INSERT INTO mcp_servers VALUES ('m',1); INSERT INTO skills VALUES ('s',1);")?;
+        Database::set_user_version(&conn, 20)?;
+        Database::apply_schema_migrations_on_conn(&conn)?;
+        assert_eq!(Database::get_user_version(&conn)?, SCHEMA_VERSION);
+        for (table, flag) in [
+            ("mcp_servers", "enabled_gemini"),
+            ("skills", "enabled_codex"),
+        ] {
+            let row = conn.query_row(
+                &format!("SELECT {flag}, enabled_agy FROM {table}"),
+                [],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+            )?;
+            assert_eq!(row, (1, 0));
+        }
+        Database::apply_schema_migrations_on_conn(&conn)?;
+        Ok(())
+    }
+
+    #[test]
+    fn agy_clean_database_persists_independent_mcp_and_skill_flags() -> Result<(), AppError> {
+        let db = Database::memory()?;
+        let mut server: crate::app_config::McpServer = serde_json::from_value(serde_json::json!({"id":"m", "name":"m", "server":{"command":"echo"}, "apps":{"gemini":true,"agy":true}})).unwrap();
+        db.save_mcp_server(&server)?;
+        server.apps.agy = false;
+        db.update_mcp_server_app_enabled("m", &crate::app_config::AppType::Agy, false)?;
+        assert_eq!(db.get_all_mcp_servers()?["m"].apps, server.apps);
+        let skill: crate::app_config::InstalledSkill = serde_json::from_value(serde_json::json!({"id":"s", "name":"s", "directory":"s", "installedAt":0, "apps":{"agy":true,"gemini":true}})).unwrap();
+        db.save_skill(&skill)?;
+        assert!(db.get_installed_skill("s")?.unwrap().apps.agy);
+        let mut apps = skill.apps;
+        apps.agy = false;
+        db.update_skill_apps("s", &apps)?;
+        let read = db.get_all_installed_skills()?;
+        assert!(!read["s"].apps.agy);
+        assert!(read["s"].apps.gemini);
+        Ok(())
+    }
+
+    #[test]
     fn migrate_v19_to_v20_adds_pi_mcp_flag_and_keeps_existing_flags() -> Result<(), AppError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
@@ -4174,88 +4214,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn migrate_v18_to_v20_repairs_development_database() -> Result<(), AppError> {
-        // 两张表模拟在字段合入前已执行过 v11 迁移、之后再升到 v18 的开发库。
-        let conn = Connection::open_in_memory()?;
-        conn.execute_batch(
-            "CREATE TABLE proxy_request_logs (
-                request_id TEXT PRIMARY KEY,
-                model TEXT NOT NULL
-             );
-             INSERT INTO proxy_request_logs (request_id, model) VALUES ('existing', 'gpt-5');
-             CREATE TABLE usage_daily_rollups (
-                date TEXT NOT NULL,
-                app_type TEXT NOT NULL,
-                provider_id TEXT NOT NULL,
-                model TEXT NOT NULL,
-                request_count INTEGER NOT NULL DEFAULT 0,
-                success_count INTEGER NOT NULL DEFAULT 0,
-                input_tokens INTEGER NOT NULL DEFAULT 0,
-                output_tokens INTEGER NOT NULL DEFAULT 0,
-                cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-                cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
-                input_token_semantics INTEGER NOT NULL DEFAULT 0,
-                total_cost_usd TEXT NOT NULL DEFAULT '0',
-                avg_latency_ms INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (date, app_type, provider_id, model)
-             );
-             INSERT INTO usage_daily_rollups
-                (date, app_type, provider_id, model, request_count, input_tokens,
-                 input_token_semantics, total_cost_usd)
-             VALUES ('2026-09-07', 'pi', '_pi_session', 'gpt-5', 3, 42, 2, '0.001');",
-        )?;
-        Database::set_user_version(&conn, 18)?;
 
-        Database::apply_schema_migrations_on_conn(&conn)?;
-
-        assert_eq!(Database::get_user_version(&conn)?, SCHEMA_VERSION);
-        assert!(Database::has_column(
-            &conn,
-            "proxy_request_logs",
-            "pricing_model"
-        )?);
-        assert!(Database::has_column(
-            &conn,
-            "usage_daily_rollups",
-            "request_model"
-        )?);
-        assert!(Database::has_column(
-            &conn,
-            "usage_daily_rollups",
-            "pricing_model"
-        )?);
-        let (model, request_model, pricing_model, input, semantics, cost): (
-            String,
-            String,
-            String,
-            i64,
-            i64,
-            String,
-        ) = conn.query_row(
-            "SELECT model, request_model, pricing_model, input_tokens,
-                    input_token_semantics, total_cost_usd
-             FROM usage_daily_rollups",
-            [],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                ))
-            },
-        )?;
-        assert_eq!(model, "gpt-5");
-        assert_eq!(request_model, "");
-        assert_eq!(pricing_model, "");
-        assert_eq!(input, 42);
-        assert_eq!(semantics, 2);
-        assert_eq!(cost, "0.001");
-        Ok(())
-    }
 
     #[test]
     fn migrate_v17_to_v18_adds_byte_cursor_to_existing_sync_table() -> Result<(), AppError> {
