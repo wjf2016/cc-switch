@@ -2734,6 +2734,11 @@ function ProviderFormFull({
             <ClaudeAccountSelect
               value={selectedClaudeAccountId}
               onChange={setSelectedClaudeAccountId}
+              onManageAccounts={
+                onManageAuthAccounts
+                  ? () => onManageAuthAccounts("claude_official")
+                  : undefined
+              }
             />
           )}
 
